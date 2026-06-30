@@ -111,6 +111,35 @@ router.post('/verify-otp',
   }
 );
 
+// ── POST /api/auth/firebase-phone-login ──────────────────────────────────────
+// Called by the frontend AFTER Firebase Phone Auth verifies the OTP.
+// We trust Firebase's verification and just need the phone number to issue our JWT.
+router.post('/firebase-phone-login', authLimiter, async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ error: 'idToken required' });
+
+  let phone;
+  try {
+    const admin   = require('../services/firebaseAdmin');
+    if (!admin.apps.length) throw new Error('Firebase Admin not initialised');
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    phone = (decoded.phone_number || '').replace('+91', '');
+    if (!phone) throw new Error('No phone number in token');
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid Firebase token', detail: err.message });
+  }
+
+  const result = await query(
+    'SELECT id, shop_name, owner_name, phone FROM shops WHERE phone = $1',
+    [phone]
+  );
+  if (!result.rows.length) {
+    return res.status(404).json({ error: 'No shop found for this number. Please register first.' });
+  }
+  const shop = result.rows[0];
+  res.json({ token: signToken(shop.id, shop.phone), shop: { id: shop.id, shopName: shop.shop_name, ownerName: shop.owner_name } });
+});
+
 // ── POST /api/auth/login (email + password) ───────────────────────────────────
 router.post('/login',
   authLimiter,

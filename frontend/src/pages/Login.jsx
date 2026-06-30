@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp, generateOTP, verifyOTP } from '../context/AppContext';
 import { api, ApiError } from '../utils/api';
 import { Phone, Mail, Lock, Eye, EyeOff, ShoppingBag, AlertCircle, ArrowLeft, CheckCircle } from 'lucide-react';
+import { auth, firebaseReady } from '../utils/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 // Shown in demo mode so the developer can test OTP without a real SMS service
 function DemoOtpBox({ code }) {
@@ -49,20 +51,47 @@ function PhoneOtpLogin({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Firebase Phone Auth refs
+  const recaptchaRef    = useRef(null);
+  const confirmationRef = useRef(null);
+
+  const clearRecaptcha = () => {
+    if (recaptchaRef.current) { recaptchaRef.current.clear(); recaptchaRef.current = null; }
+  };
+
   const handleSendOtp = async (e) => {
     e?.preventDefault();
     setError('');
     if (!phone || phone.length < 10) { setError('Enter a valid 10-digit mobile number'); return; }
     setLoading(true);
+
+    // ── Firebase path (real SMS) ─────────────────────────────────────────────
+    if (firebaseReady) {
+      try {
+        clearRecaptcha();
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+        confirmationRef.current = await signInWithPhoneNumber(auth, '+91' + phone, recaptchaRef.current);
+        setLoading(false);
+        setOtp(['', '', '', '', '', '']);
+        setDemoOtp('');
+        setOfflineMode(false);
+        setStep(2);
+        return;
+      } catch (err) {
+        clearRecaptcha();
+        // Firebase failed — fall through to backend OTP below
+        console.warn('[Firebase] signInWithPhoneNumber failed:', err.message);
+      }
+    }
+
+    // ── Backend OTP path (dev / Firebase not configured) ────────────────────
     try {
-      // Try backend first — sends real SMS, returns dev OTP in non-production
       const res = await api.post('/api/auth/send-otp', { phone });
       setDemoOtp(res.devOtp || '');
-      setPendingShop(null); // shop comes from verify-otp response
+      setPendingShop(null);
       setOfflineMode(false);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
-        // Backend unreachable or DB down — fall back to localStorage demo mode
         const result = validatePhoneLogin(phone);
         if (!result.success) { setLoading(false); setError(result.message); return; }
         const code = generateOTP(phone);
@@ -98,14 +127,33 @@ function PhoneOtpLogin({ onSuccess }) {
     const entered = otp.join('');
     if (entered.length < 6) { setError('Enter the complete 6-digit OTP'); return; }
     setLoading(true);
+
+    // ── Firebase verification ────────────────────────────────────────────────
+    if (confirmationRef.current) {
+      try {
+        const credential = await confirmationRef.current.confirm(entered);
+        const idToken    = await credential.user.getIdToken();
+        const res        = await api.post('/api/auth/firebase-phone-login', { idToken });
+        setLoading(false);
+        onSuccess(res.shop, res.token);
+        return;
+      } catch (err) {
+        setLoading(false);
+        setError(err.code === 'auth/invalid-verification-code' ? 'Incorrect OTP. Please try again.' : err.message || 'Verification failed.');
+        return;
+      }
+    }
+
+    // ── Offline fallback ─────────────────────────────────────────────────────
     if (offlineMode) {
-      // Offline — verify against in-memory OTP store
       await new Promise(r => setTimeout(r, 500));
       setLoading(false);
       if (!verifyOTP(phone, entered)) { setError('Incorrect OTP. Please try again.'); return; }
-      onSuccess(pendingShop, null); // no token in offline mode
+      onSuccess(pendingShop, null);
       return;
     }
+
+    // ── Backend OTP verification ─────────────────────────────────────────────
     try {
       const res = await api.post('/api/auth/verify-otp', { phone, otp: entered });
       setLoading(false);
@@ -119,6 +167,8 @@ function PhoneOtpLogin({ onSuccess }) {
   if (step === 1) {
     return (
       <form onSubmit={handleSendOtp} className="space-y-5">
+        {/* Invisible reCAPTCHA container required by Firebase Phone Auth */}
+        <div id="recaptcha-container" />
         {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2"><AlertCircle size={15} />{error}</div>}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Mobile Number</label>
