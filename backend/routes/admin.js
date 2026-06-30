@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const nodemailer = require('nodemailer');
 const { query } = require('../db');
 
 const FREE_SHOP_LIMIT = 50;
@@ -39,6 +40,30 @@ router.get('/usage', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[Admin] Usage stats error:', err.message);
     res.status(500).json({ error: 'Could not fetch usage stats' });
+  }
+});
+
+// GET /api/admin/test-email — sends a test email to ADMIN_ALERT_EMAIL to verify SMTP config
+router.get('/test-email', adminAuth, async (req, res) => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
+    return res.status(400).json({ error: 'SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in Render' });
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+    const to = process.env.ADMIN_ALERT_EMAIL || process.env.SMTP_USER;
+    await transporter.sendMail({
+      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+      to,
+      subject: 'ShopEase — Test Email',
+      html: '<p>This is a test email. If you received this, your SMTP configuration on Render is working correctly.</p>',
+    });
+    res.json({ status: 'sent', to });
+  } catch (err) {
+    res.status(500).json({ error: 'Email send failed', detail: err.message });
   }
 });
 

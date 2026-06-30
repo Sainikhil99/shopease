@@ -2,8 +2,9 @@ const nodemailer = require('nodemailer');
 const { query } = require('../db');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
 async function getDailyReportData(shopId, date) {
@@ -87,7 +88,7 @@ async function sendDailyReport(shopId) {
   if (!data.shop.daily_report || !data.shop.report_email) return;
   const html = buildDailyEmailHTML(data);
   await transporter.sendMail({
-    from: `"ShopEase Reports" <${process.env.GMAIL_USER}>`,
+    from: process.env.FROM_EMAIL || `"ShopEase Reports" <${process.env.SMTP_USER}>`,
     to: data.shop.report_email,
     subject: `Daily Sales Report — ${data.date} | ${data.shop.shop_name}`,
     html,
@@ -100,7 +101,7 @@ async function sendMonthlyReport(shopId) {
   if (!shop.monthly_report || !shop.report_email) return;
   // Monthly report content would be built here (similar to daily but for full month)
   await transporter.sendMail({
-    from: `"ShopEase Reports" <${process.env.GMAIL_USER}>`,
+    from: process.env.FROM_EMAIL || `"ShopEase Reports" <${process.env.SMTP_USER}>`,
     to: shop.report_email,
     subject: `Monthly Report — ${new Date().toLocaleString('en-IN',{month:'long',year:'numeric'})} | ${shop.shop_name}`,
     html: `<p>Your monthly report for ${shop.shop_name} is ready. Full PDF attached.</p>`,
