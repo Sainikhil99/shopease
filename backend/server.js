@@ -105,8 +105,8 @@ app.get('/health', async (_req, res) => {
   try {
     await ping();
     res.json({ status: 'ok', pid: process.pid, ts: new Date().toISOString() });
-  } catch {
-    res.status(503).json({ status: 'error', detail: 'Database unreachable' });
+  } catch (err) {
+    res.status(503).json({ status: 'error', detail: 'Database unreachable', debug: err.message });
   }
 });
 
