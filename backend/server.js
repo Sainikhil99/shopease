@@ -1,6 +1,10 @@
 // Expand libuv thread pool BEFORE any require — bcrypt uses it heavily
 process.env.UV_THREADPOOL_SIZE = String(Math.min(require('os').cpus().length * 4, 128));
 
+// Render's free tier has no IPv6 route out; Node 18+ tries IPv6 first by
+// default, which hangs until timeout against Supabase/Gmail's IPv6 records.
+require('dns').setDefaultResultOrder('ipv4first');
+
 require('dotenv').config();
 const cluster   = require('cluster');
 const os        = require('os');

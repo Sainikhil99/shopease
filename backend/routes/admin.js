@@ -53,6 +53,7 @@ router.get('/test-email', adminAuth, async (req, res) => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      family: 4, // force IPv4 — Render free tier has no IPv6 route
     });
     const to = process.env.ADMIN_ALERT_EMAIL || process.env.SMTP_USER;
     await transporter.sendMail({
