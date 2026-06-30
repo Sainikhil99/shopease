@@ -1,6 +1,6 @@
 const router = require('express').Router();
-const nodemailer = require('nodemailer');
 const { query } = require('../db');
+const { sendEmail } = require('../services/resendEmail');
 
 const FREE_SHOP_LIMIT = 50;
 const FREE_DB_MB = 500;
@@ -43,24 +43,20 @@ router.get('/usage', adminAuth, async (req, res) => {
   }
 });
 
-// GET /api/admin/test-email — sends a test email to ADMIN_ALERT_EMAIL to verify SMTP config
+// GET /api/admin/test-email — sends a test email to ADMIN_ALERT_EMAIL to verify Resend config
 router.get('/test-email', adminAuth, async (req, res) => {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
-    return res.status(400).json({ error: 'SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in Render' });
+  if (!process.env.RESEND_API_KEY) {
+    return res.status(400).json({ error: 'RESEND_API_KEY not configured in Render' });
+  }
+  const to = process.env.ADMIN_ALERT_EMAIL;
+  if (!to) {
+    return res.status(400).json({ error: 'ADMIN_ALERT_EMAIL not configured in Render' });
   }
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      family: 4, // force IPv4 — Render free tier has no IPv6 route
-    });
-    const to = process.env.ADMIN_ALERT_EMAIL || process.env.SMTP_USER;
-    await transporter.sendMail({
-      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
+    await sendEmail({
       to,
       subject: 'ShopEase — Test Email',
-      html: '<p>This is a test email. If you received this, your SMTP configuration on Render is working correctly.</p>',
+      html: '<p>This is a test email. If you received this, your Resend configuration on Render is working correctly.</p>',
     });
     res.json({ status: 'sent', to });
   } catch (err) {

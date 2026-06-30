@@ -1,5 +1,5 @@
-const nodemailer = require('nodemailer');
 const { query } = require('../db');
+const { sendEmail } = require('./resendEmail');
 
 const FREE_SHOP_LIMIT = 50;
 const FREE_DB_MB      = 500;
@@ -8,16 +8,6 @@ const FREE_DB_MB      = 500;
 // Resets on server restart — acceptable for a daily cron.
 const lastSent = {};
 
-function getTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    family: 4, // force IPv4 — Render free tier has no IPv6 route
-  });
-}
-
 function alreadySentToday(level) {
   const ts = lastSent[level];
   if (!ts) return false;
@@ -25,15 +15,14 @@ function alreadySentToday(level) {
 }
 
 async function sendAlertEmail(shopCount, dbMB, level) {
-  const to = process.env.ADMIN_ALERT_EMAIL || process.env.SMTP_USER;
+  const to = process.env.ADMIN_ALERT_EMAIL;
   if (!to) {
     console.log(`[ALERT] ${level.toUpperCase()}: ${shopCount}/${FREE_SHOP_LIMIT} shops, ${dbMB}/${FREE_DB_MB} MB (no ADMIN_ALERT_EMAIL set — skipping email)`);
     return;
   }
 
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.log(`[ALERT] ${level.toUpperCase()}: ${shopCount}/${FREE_SHOP_LIMIT} shops, ${dbMB}/${FREE_DB_MB} MB (SMTP not configured)`);
+  if (!process.env.RESEND_API_KEY) {
+    console.log(`[ALERT] ${level.toUpperCase()}: ${shopCount}/${FREE_SHOP_LIMIT} shops, ${dbMB}/${FREE_DB_MB} MB (RESEND_API_KEY not configured)`);
     return;
   }
 
@@ -89,12 +78,7 @@ async function sendAlertEmail(shopCount, dbMB, level) {
     </div>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.FROM_EMAIL || process.env.SMTP_USER,
-      to,
-      subject,
-      html,
-    });
+    await sendEmail({ to, subject, html });
     lastSent[level] = Date.now();
     console.log(`[ALERT] ${level} email sent to ${to} — shops: ${shopCount}/${FREE_SHOP_LIMIT}, DB: ${dbMB}/${FREE_DB_MB} MB`);
   } catch (err) {
