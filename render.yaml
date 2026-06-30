@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: shopease-api
+    env: node
+    region: singapore          # closest region to India
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set these in the Render dashboard → Environment tab (sync: false = manual entry)
+      - key: DATABASE_URL
+        sync: false            # Supabase connection string
+      - key: JWT_SECRET
+        sync: false            # 64-char random hex (run: openssl rand -hex 64)
+      - key: JWT_EXPIRY
+        value: 8h
+      - key: ADMIN_KEY
+        sync: false            # Must match VITE_ADMIN_KEY in Vercel
+      - key: ADMIN_ALERT_EMAIL
+        sync: false            # smuduthanapalli@gmail.com
+      - key: ALLOWED_ORIGINS
+        sync: false            # https://your-app.vercel.app
+      - key: SMTP_HOST
+        sync: false            # smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false            # your Gmail address
+      - key: SMTP_PASS
+        sync: false            # Gmail App Password (not your Gmail password)
+      - key: FROM_EMAIL
+        sync: false            # ShopEase <your@gmail.com>
+      - key: DISABLE_CLUSTER
+        value: "true"          # Render free tier has 1 CPU — skip cluster fork

@@ -1,0 +1,742 @@
+import { useState, useMemo } from 'react';
+import { useApp } from '../context/AppContext';
+import {
+  Plus, Package, TrendingUp, TrendingDown, IndianRupee,
+  X, Check, Search, ArrowRight, Printer, FileText,
+  CalendarDays, ChevronDown, AlertTriangle, Boxes
+} from 'lucide-react';
+
+// ── Period helpers ────────────────────────────────────────────────────────────
+const periodRange = (period, custom) => {
+  const now  = new Date();
+  const eod  = new Date(now); eod.setHours(23, 59, 59, 999);
+  if (period === 'today') {
+    const s = new Date(now); s.setHours(0, 0, 0, 0);
+    return { start: s, end: eod };
+  }
+  if (period === 'week') {
+    const s = new Date(now); s.setDate(now.getDate() - 6); s.setHours(0, 0, 0, 0);
+    return { start: s, end: eod };
+  }
+  if (period === 'month') {
+    return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: eod };
+  }
+  if (period === 'custom' && custom?.from && custom?.to) {
+    const s = new Date(custom.from); s.setHours(0, 0, 0, 0);
+    const e = new Date(custom.to);  e.setHours(23, 59, 59, 999);
+    return { start: s, end: e };
+  }
+  return null;
+};
+const inRange = (dateStr, range) => {
+  if (!range) return true;
+  const d = new Date(dateStr);
+  return d >= range.start && d <= range.end;
+};
+const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDateTime = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+
+// ── PDF: Stock-In Slip + Full Inventory Snapshot ──────────────────────────────
+function printStockInSlip(batch, allProducts, shop) {
+  const now       = new Date();
+  const dateStr   = fmtDateTime(now.toISOString());
+  const suppliers = [...new Set(batch.map(i => i.supplier).filter(Boolean))].join(', ') || '—';
+  const invoices  = [...new Set(batch.map(i => i.invoice).filter(Boolean))].join(', ') || '—';
+  const totalQty  = batch.reduce((s, i) => s + i.qtyAdded, 0);
+  const totalCost = batch.reduce((s, i) => s + i.qtyAdded * (parseFloat(i.costPrice) || 0), 0);
+
+  const batchRows = batch.map(b => `
+    <tr>
+      <td>${b.product.name}</td>
+      <td style="text-align:center">${b.product.category}</td>
+      <td style="text-align:center;color:#dc2626;font-weight:bold">${b.qtyBefore}</td>
+      <td style="text-align:center;color:#16a34a;font-weight:bold">+${b.qtyAdded}</td>
+      <td style="text-align:center;color:#1d4ed8;font-weight:bold">${b.qtyAfter}</td>
+      <td style="text-align:center">${b.costPrice ? '₹' + parseFloat(b.costPrice).toLocaleString('en-IN') : '—'}</td>
+      <td style="text-align:center">${b.costPrice ? '₹' + (b.qtyAdded * parseFloat(b.costPrice)).toLocaleString('en-IN') : '—'}</td>
+      <td>${b.note || '—'}</td>
+    </tr>`).join('');
+
+  const snapshotRows = allProducts.map(p => `
+    <tr>
+      <td>${p.name}</td>
+      <td>${p.category}</td>
+      <td style="text-align:center;font-weight:bold;color:${p.stockQty === 0 ? '#dc2626' : p.stockQty <= p.minStockAlert ? '#ea580c' : '#111'}">${p.stockQty}</td>
+      <td style="text-align:center">₹${(p.sellingPrice || p.mrp).toLocaleString('en-IN')}</td>
+      <td style="text-align:center">₹${(p.costPrice || 0).toLocaleString('en-IN')}</td>
+      <td style="text-align:center">₹${(p.stockQty * (p.costPrice || 0)).toLocaleString('en-IN')}</td>
+      <td style="text-align:center;font-weight:bold;color:${p.stockQty === 0 ? '#dc2626' : p.stockQty <= p.minStockAlert ? '#ea580c' : '#16a34a'}">
+        ${p.stockQty === 0 ? '🔴 OUT' : p.stockQty <= p.minStockAlert ? '🟠 LOW' : '🟢 OK'}
+      </td>
+    </tr>`).join('');
+
+  const totalStockValue = allProducts.reduce((s, p) => s + p.stockQty * (p.costPrice || 0), 0);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Stock-In Receipt — ${shop.shopName}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:24px;max-width:900px;margin:auto}
+    .print-btn{display:block;margin:0 0 16px auto;padding:10px 28px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
+    .shop-header{text-align:center;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px}
+    .shop-header h1{font-size:22px;color:#1d4ed8;font-weight:800}
+    .shop-header p{color:#555;margin-top:3px;font-size:11px}
+    .slip-badge{text-align:center;background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;padding:8px;font-size:15px;font-weight:800;color:#1e40af;margin-bottom:16px;letter-spacing:1px}
+    .meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+    .meta-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+    .meta-label{font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px}
+    .meta-value{font-size:13px;font-weight:bold;color:#111;margin-top:3px}
+    .section{font-size:13px;font-weight:800;color:#1d4ed8;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #bfdbfe;text-transform:uppercase;letter-spacing:.5px}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    thead th{background:#1d4ed8;color:#fff;padding:8px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+    tbody td{padding:7px 6px;border-bottom:1px solid #f3f4f6;font-size:11px}
+    tbody tr:nth-child(even) td{background:#f9fafb}
+    .total-row td{border-top:2px solid #1d4ed8;background:#eff6ff!important;font-weight:bold;color:#1d4ed8}
+    .footer{text-align:center;margin-top:28px;padding-top:12px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:10px}
+    @media print{.print-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  <div class="shop-header">
+    <h1>${shop.shopName}</h1>
+    <p>${shop.address || ''} ${shop.phone ? '· 📞 ' + shop.phone : ''} ${shop.gstin ? '· GSTIN: ' + shop.gstin : ''}</p>
+  </div>
+  <div class="slip-badge">📦 STOCK-IN RECEIPT</div>
+  <div class="meta-grid">
+    <div class="meta-box"><div class="meta-label">Date & Time</div><div class="meta-value">${dateStr}</div></div>
+    <div class="meta-box"><div class="meta-label">Supplier</div><div class="meta-value">${suppliers}</div></div>
+    <div class="meta-box"><div class="meta-label">Invoice No.</div><div class="meta-value">${invoices}</div></div>
+    <div class="meta-box"><div class="meta-label">Products Added</div><div class="meta-value">${batch.length} item${batch.length > 1 ? 's' : ''} · ${totalQty} pieces</div></div>
+  </div>
+  <div class="section">Stock Addition Details</div>
+  <table><thead><tr>
+    <th>Product</th><th>Category</th><th>Before</th><th>Added</th><th>After</th><th>Cost/Pc</th><th>Total Cost</th><th>Note</th>
+  </tr></thead><tbody>
+    ${batchRows}
+    <tr class="total-row"><td colspan="3" style="text-align:right;padding-right:12px">TOTAL</td>
+      <td style="text-align:center">+${totalQty}</td><td></td><td></td>
+      <td style="text-align:center">₹${totalCost.toLocaleString('en-IN')}</td><td></td></tr>
+  </tbody></table>
+  <div class="section">Full Inventory Snapshot — ${dateStr}</div>
+  <table><thead><tr>
+    <th>Product</th><th>Category</th><th>Stock Qty</th><th>Selling Price</th><th>Cost Price</th><th>Stock Value</th><th>Status</th>
+  </tr></thead><tbody>
+    ${snapshotRows}
+    <tr class="total-row"><td colspan="5" style="text-align:right;padding-right:12px">TOTAL INVENTORY VALUE</td>
+      <td style="text-align:center">₹${totalStockValue.toLocaleString('en-IN')}</td><td></td></tr>
+  </tbody></table>
+  <div class="footer">
+    <p>Generated by ShopEase · ${dateStr}</p>
+    <p style="margin-top:4px">This is a computer-generated stock-in receipt. Keep for your records.</p>
+  </div>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=960,height=720');
+  win.document.write(html);
+  win.document.close();
+}
+
+// ── PDF: Period / Monthly Report ──────────────────────────────────────────────
+function printInventoryReport(products, stockLedger, range, periodLabel, shop) {
+  const entries = stockLedger.filter(e => inRange(e.date, range));
+  const dateStr = fmtDateTime(new Date().toISOString());
+
+  const rows = products.map(p => {
+    const pEntries  = entries.filter(e => e.productId === p.id);
+    const addedQty  = pEntries.filter(e => e.type !== 'sale').reduce((s, e) => s + e.qty, 0);
+    const soldQty   = pEntries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+    const openingQty = p.stockQty - addedQty + soldQty;
+    return { p, openingQty, addedQty, soldQty, closingQty: p.stockQty };
+  });
+
+  const tableRows = rows.map(({ p, openingQty, addedQty, soldQty, closingQty }) => `
+    <tr>
+      <td>${p.name}</td>
+      <td>${p.category}</td>
+      <td style="text-align:center">${openingQty}</td>
+      <td style="text-align:center;color:#16a34a;font-weight:bold">+${addedQty}</td>
+      <td style="text-align:center;color:#dc2626;font-weight:bold">−${soldQty}</td>
+      <td style="text-align:center;font-weight:bold;color:${closingQty === 0 ? '#dc2626' : closingQty <= p.minStockAlert ? '#ea580c' : '#1d4ed8'}">${closingQty}</td>
+      <td style="text-align:center">₹${(closingQty * (p.costPrice || 0)).toLocaleString('en-IN')}</td>
+    </tr>`).join('');
+
+  const totalVal = rows.reduce((s, r) => s + r.closingQty * (r.p.costPrice || 0), 0);
+
+  const movRows = stockLedger
+    .filter(e => inRange(e.date, range))
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .map(e => {
+      const prod = products.find(p => p.id === e.productId);
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${prod?.name || '—'}</td>
+        <td style="text-align:center;font-weight:bold;color:${e.type === 'sale' ? '#dc2626' : '#16a34a'}">${e.type}</td>
+        <td style="text-align:center;font-weight:bold;color:${e.type === 'sale' ? '#dc2626' : '#16a34a'}">${e.type === 'sale' ? '−' : '+'}${e.qty}</td>
+        <td style="text-align:center">${e.balanceAfter}</td>
+        <td>${e.supplierName || '—'}</td>
+        <td>${e.billNumber || '—'}</td>
+        <td>${e.note || '—'}</td>
+      </tr>`;
+    }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Inventory Report — ${periodLabel}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:24px;max-width:1000px;margin:auto}
+    .print-btn{display:block;margin:0 0 16px auto;padding:10px 28px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
+    .shop-header{text-align:center;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px}
+    .shop-header h1{font-size:20px;color:#1d4ed8;font-weight:800}
+    .report-badge{text-align:center;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:8px;padding:8px;font-size:14px;font-weight:800;color:#15803d;margin-bottom:16px}
+    .section{font-size:12px;font-weight:800;color:#1d4ed8;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #bfdbfe;text-transform:uppercase}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    thead th{background:#1d4ed8;color:#fff;padding:7px 5px;text-align:left;font-size:10px;text-transform:uppercase}
+    tbody td{padding:6px 5px;border-bottom:1px solid #f3f4f6;font-size:10px}
+    tbody tr:nth-child(even) td{background:#f9fafb}
+    .total-row td{border-top:2px solid #1d4ed8;background:#eff6ff!important;font-weight:bold;color:#1d4ed8}
+    .footer{text-align:center;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:10px}
+    @media print{.print-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  <div class="shop-header">
+    <h1>${shop.shopName}</h1>
+    <p>${shop.address || ''} ${shop.phone ? '· 📞 ' + shop.phone : ''}</p>
+  </div>
+  <div class="report-badge">📊 INVENTORY REPORT — ${periodLabel.toUpperCase()}</div>
+  <div class="section">Product-wise Summary (Opening → Added → Sold → Closing)</div>
+  <table><thead><tr>
+    <th>Product</th><th>Category</th><th>Opening Stock</th><th>Added (+)</th><th>Sold (−)</th><th>Closing Stock</th><th>Stock Value</th>
+  </tr></thead><tbody>
+    ${tableRows}
+    <tr class="total-row"><td colspan="6" style="text-align:right;padding-right:12px">TOTAL INVENTORY VALUE</td>
+      <td style="text-align:center">₹${totalVal.toLocaleString('en-IN')}</td></tr>
+  </tbody></table>
+  <div class="section">All Stock Movements in Period</div>
+  <table><thead><tr>
+    <th>Date</th><th>Product</th><th>Type</th><th>Qty</th><th>Balance After</th><th>Supplier</th><th>Bill / Invoice</th><th>Note</th>
+  </tr></thead><tbody>${movRows || '<tr><td colspan="8" style="text-align:center;padding:16px;color:#9ca3af">No movements in this period</td></tr>'}</tbody></table>
+  <div class="footer"><p>Generated by ShopEase · ${dateStr}</p></div>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=1024,height=720');
+  win.document.write(html);
+  win.document.close();
+}
+
+// ── Add Stock Modal ───────────────────────────────────────────────────────────
+function AddStockModal({ products, onSave, onClose }) {
+  const [batch, setBatch]         = useState([]);
+  const [search, setSearch]       = useState('');
+  const [supplier, setSupplier]   = useState('');
+  const [invoice, setInvoice]     = useState('');
+  const [showDrop, setShowDrop]   = useState(false);
+
+  const filtered = products.filter(p =>
+    p.isActive && (
+      !search.trim() ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.barcode?.includes(search)
+    )
+  );
+
+  const addToBatch = (product) => {
+    if (batch.find(b => b.product.id === product.id)) return;
+    setBatch(prev => [...prev, {
+      product, qtyAdded: '', costPrice: String(product.costPrice || ''), note: '',
+    }]);
+    setSearch(''); setShowDrop(false);
+  };
+
+  const updateItem = (idx, key, val) => {
+    setBatch(prev => prev.map((b, i) => i === idx ? { ...b, [key]: val } : b));
+  };
+
+  const removeItem = (idx) => setBatch(prev => prev.filter((_, i) => i !== idx));
+
+  const canSave = batch.length > 0 && batch.every(b => parseInt(b.qtyAdded) > 0);
+
+  const handleSave = () => {
+    if (!canSave) return;
+    const result = batch.map(b => ({
+      product:    b.product,
+      qtyBefore:  b.product.stockQty,
+      qtyAdded:   parseInt(b.qtyAdded),
+      qtyAfter:   b.product.stockQty + parseInt(b.qtyAdded),
+      supplier:   supplier.trim(),
+      invoice:    invoice.trim(),
+      costPrice:  b.costPrice,
+      note:       b.note.trim(),
+    }));
+    onSave(result);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">Add Stock</h3>
+            <p className="text-sm text-gray-400 mt-0.5">Select products received today and enter quantities</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* Shared fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Supplier / Source</label>
+              <input type="text" value={supplier} onChange={e => setSupplier(e.target.value)}
+                placeholder="e.g. Textile Mart, Mumbai" className="input-field" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Invoice Number</label>
+              <input type="text" value={invoice} onChange={e => setInvoice(e.target.value)}
+                placeholder="e.g. INV-2026-001" className="input-field" />
+            </div>
+          </div>
+
+          {/* Product search */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Add Products</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input type="text" value={search}
+                onChange={e => { setSearch(e.target.value); setShowDrop(true); }}
+                onFocus={() => setShowDrop(true)}
+                placeholder="Search product name or barcode to add…"
+                className="input-field pl-9 text-sm" />
+              {search && <button onClick={() => { setSearch(''); setShowDrop(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>}
+            </div>
+            {showDrop && (
+              <div className="border border-gray-200 rounded-xl mt-1 overflow-hidden shadow-md max-h-44 overflow-y-auto">
+                {filtered.length === 0
+                  ? <p className="text-sm text-gray-400 px-4 py-3">No products found</p>
+                  : filtered.map(p => {
+                    const already = batch.find(b => b.product.id === p.id);
+                    return (
+                      <button key={p.id} type="button"
+                        onClick={() => already ? null : addToBatch(p)}
+                        disabled={!!already}
+                        className={`w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 last:border-0 text-left transition-colors ${already ? 'bg-green-50 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+                          <p className="text-xs text-gray-400 capitalize">{p.category} · Stock: {p.stockQty}</p>
+                        </div>
+                        <span className={`text-xs font-bold ${already ? 'text-green-600' : 'text-blue-600'}`}>
+                          {already ? '✓ Added' : '+ Add'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                <button type="button" onClick={() => setShowDrop(false)}
+                  className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 bg-gray-50">
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Batch items */}
+          {batch.length === 0 ? (
+            <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400">
+              <Boxes size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Search and add products above</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                {batch.length} product{batch.length > 1 ? 's' : ''} — enter qty received for each
+              </p>
+              {batch.map((item, idx) => {
+                const added  = parseInt(item.qtyAdded) || 0;
+                const after  = item.product.stockQty + added;
+                return (
+                  <div key={item.product.id} className="border-2 border-blue-100 bg-blue-50/40 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-bold text-gray-800">{item.product.name}</p>
+                        <p className="text-xs text-gray-500 capitalize">{item.product.category}</p>
+                      </div>
+                      <button onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600 p-1">
+                        <X size={15} />
+                      </button>
+                    </div>
+
+                    {/* Before → Added → After */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex-1 bg-white rounded-xl p-3 text-center border border-gray-200">
+                        <p className="text-xs text-gray-400 font-semibold">BEFORE</p>
+                        <p className="text-2xl font-black text-gray-700 mt-0.5">{item.product.stockQty}</p>
+                        <p className="text-xs text-gray-400">pcs</p>
+                      </div>
+                      <div className="text-gray-300 shrink-0">
+                        <ArrowRight size={20} />
+                      </div>
+                      <div className="flex-1 bg-white rounded-xl p-2 text-center border-2 border-green-300">
+                        <p className="text-xs text-green-600 font-bold">ADD</p>
+                        <input type="number" min="1" value={item.qtyAdded}
+                          onChange={e => updateItem(idx, 'qtyAdded', e.target.value)}
+                          placeholder="0"
+                          className="w-full text-2xl font-black text-green-700 text-center bg-transparent outline-none border-none"
+                          autoFocus={idx === 0}
+                        />
+                        <p className="text-xs text-green-500">pcs</p>
+                      </div>
+                      <div className="text-gray-300 shrink-0">
+                        <ArrowRight size={20} />
+                      </div>
+                      <div className={`flex-1 rounded-xl p-3 text-center border-2 ${added > 0 ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-200'}`}>
+                        <p className={`text-xs font-bold ${added > 0 ? 'text-blue-200' : 'text-gray-400'}`}>AFTER</p>
+                        <p className={`text-2xl font-black mt-0.5 ${added > 0 ? 'text-white' : 'text-gray-300'}`}>{added > 0 ? after : '—'}</p>
+                        <p className={`text-xs ${added > 0 ? 'text-blue-200' : 'text-gray-300'}`}>pcs</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Cost per Piece (₹)</label>
+                        <input type="number" min="0" value={item.costPrice}
+                          onChange={e => updateItem(idx, 'costPrice', e.target.value)}
+                          placeholder={String(item.product.costPrice || 0)}
+                          className="input-field text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Note / Remarks</label>
+                        <input type="text" value={item.note}
+                          onChange={e => updateItem(idx, 'note', e.target.value)}
+                          placeholder="Optional note"
+                          className="input-field text-sm" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-gray-100 flex gap-3 shrink-0 bg-gray-50 rounded-b-2xl">
+          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+          <button onClick={handleSave} disabled={!canSave}
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+            <Check size={16} />
+            Save & Generate PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Inventory Page ───────────────────────────────────────────────────────
+export default function Inventory() {
+  const { products, stockLedger, addStockPurchase, shop } = useApp();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [period, setPeriod]             = useState('month');
+  const [custom, setCustom]             = useState({ from: '', to: '' });
+  const [showCustom, setShowCustom]     = useState(false);
+  const [expandedId, setExpandedId]     = useState(null);
+
+  const range = useMemo(() => periodRange(period, custom), [period, custom]);
+
+  const periodLabel = period === 'today' ? 'Today' :
+    period === 'week' ? 'This Week' :
+    period === 'month' ? `${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}` :
+    period === 'custom' && custom.from ? `${fmtDate(custom.from)} – ${fmtDate(custom.to)}` :
+    'Select Period';
+
+  // Per-product stats for the period
+  const productStats = useMemo(() => products.map(p => {
+    const entries   = stockLedger.filter(e => e.productId === p.id && inRange(e.date, range));
+    const addedQty  = entries.filter(e => e.type !== 'sale').reduce((s, e) => s + e.qty, 0);
+    const soldQty   = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+    const openingQty = Math.max(0, p.stockQty - addedQty + soldQty);
+    return { ...p, openingQty, addedQty, soldQty, closingQty: p.stockQty };
+  }), [products, stockLedger, range]);
+
+  // Summary cards
+  const totalAdded    = productStats.reduce((s, p) => s + p.addedQty, 0);
+  const totalSold     = productStats.reduce((s, p) => s + p.soldQty, 0);
+  const totalStockVal = products.reduce((s, p) => s + p.stockQty * (p.costPrice || 0), 0);
+  const outOfStock    = products.filter(p => p.stockQty === 0).length;
+
+  // Only ledger entries whose product belongs to this shop
+  const ownProductIds = useMemo(() => new Set(products.map(p => p.id)), [products]);
+
+  // Stock-in entries in period (for history list)
+  const historyEntries = useMemo(() =>
+    stockLedger
+      .filter(e => ownProductIds.has(e.productId) && inRange(e.date, range))
+      .sort((a, b) => new Date(b.date) - new Date(a.date)),
+    [stockLedger, range, ownProductIds]
+  );
+
+  const handleAddStock = (batch) => {
+    batch.forEach(item => {
+      addStockPurchase(
+        item.product.id, item.qtyAdded, item.supplier,
+        item.note, parseFloat(item.costPrice) || item.product.costPrice || 0
+      );
+    });
+    setShowAddModal(false);
+    printStockInSlip(batch, products, shop);
+  };
+
+  const PERIODS = [
+    { key: 'today', label: 'Today' },
+    { key: 'week',  label: 'This Week' },
+    { key: 'month', label: 'This Month' },
+    { key: 'custom', label: 'Custom Range' },
+  ];
+
+  const typeStyle = {
+    opening:  'bg-blue-100 text-blue-700',
+    purchase: 'bg-green-100 text-green-700',
+    sale:     'bg-red-100 text-red-600',
+    return:   'bg-orange-100 text-orange-700',
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-5">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Inventory</h2>
+          <p className="text-gray-500 text-sm mt-0.5">Track stock-in, stock-out, and inventory value</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => printInventoryReport(products, stockLedger, range, periodLabel, shop)}
+            className="btn-secondary flex items-center gap-2">
+            <FileText size={16} /> Download Report
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2">
+            <Plus size={18} /> Add Stock
+          </button>
+        </div>
+      </div>
+
+      {/* Period filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {PERIODS.map(({ key, label }) => (
+          <button key={key}
+            onClick={() => { setPeriod(key); if (key === 'custom') setShowCustom(true); else setShowCustom(false); }}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              period === key ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
+            }`}>
+            <CalendarDays size={13} className="inline mr-1.5 -mt-0.5" />{label}
+          </button>
+        ))}
+        {period === 'custom' && (
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
+            <input type="date" value={custom.from} onChange={e => setCustom(p => ({ ...p, from: e.target.value }))}
+              className="text-sm text-gray-700 outline-none" />
+            <span className="text-gray-400">→</span>
+            <input type="date" value={custom.to} onChange={e => setCustom(p => ({ ...p, to: e.target.value }))}
+              className="text-sm text-gray-700 outline-none" />
+          </div>
+        )}
+        <span className="text-sm text-gray-500 ml-2">Showing: <span className="font-semibold text-gray-700">{periodLabel}</span></span>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center"><Package size={18} className="text-blue-600" /></div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Products</p>
+          </div>
+          <p className="text-3xl font-black text-gray-800">{products.length}</p>
+          <p className="text-xs text-red-500 mt-1">{outOfStock} out of stock</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center"><TrendingUp size={18} className="text-green-600" /></div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Received</p>
+          </div>
+          <p className="text-3xl font-black text-green-700">+{totalAdded}</p>
+          <p className="text-xs text-gray-400 mt-1">pieces added in period</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center"><TrendingDown size={18} className="text-red-500" /></div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sold</p>
+          </div>
+          <p className="text-3xl font-black text-red-600">−{totalSold}</p>
+          <p className="text-xs text-gray-400 mt-1">pieces sold in period</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center"><IndianRupee size={18} className="text-purple-600" /></div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock Value</p>
+          </div>
+          <p className="text-3xl font-black text-purple-700">₹{Math.round(totalStockVal).toLocaleString('en-IN')}</p>
+          <p className="text-xs text-gray-400 mt-1">current inventory at cost</p>
+        </div>
+      </div>
+
+      {/* Product Inventory Table */}
+      <div className="card overflow-hidden p-0">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-bold text-gray-800">Product-wise Inventory — {periodLabel}</h3>
+          <p className="text-xs text-gray-400">Click ▼ to see movements</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                {['Product', 'Category', 'Opening Stock', 'Added (+)', 'Sold (−)', 'Current Stock', 'Stock Value', ''].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {productStats.map(p => {
+                const isExp = expandedId === p.id;
+                const periodMovements = stockLedger
+                  .filter(e => e.productId === p.id && inRange(e.date, range))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date));
+                return [
+                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-gray-800">{p.name}</p>
+                      {p.barcode && <p className="text-xs text-gray-400">{p.barcode}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 capitalize text-xs">{p.category}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-bold text-gray-700">{p.openingQty}</span>
+                      <span className="text-xs text-gray-400 ml-1">pcs</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-bold text-base ${p.addedQty > 0 ? 'text-green-600' : 'text-gray-300'}`}>
+                        +{p.addedQty}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">pcs</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-bold text-base ${p.soldQty > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+                        −{p.soldQty}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">pcs</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-black text-lg ${p.closingQty === 0 ? 'text-red-600' : p.closingQty <= p.minStockAlert ? 'text-orange-500' : 'text-gray-800'}`}>
+                          {p.closingQty}
+                        </span>
+                        <span className="text-xs text-gray-400">pcs</span>
+                        {p.closingQty === 0 && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">OUT</span>}
+                        {p.closingQty > 0 && p.closingQty <= p.minStockAlert && <AlertTriangle size={12} className="text-orange-500" />}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-purple-700 font-semibold">
+                      ₹{(p.closingQty * (p.costPrice || 0)).toLocaleString('en-IN')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setExpandedId(isExp ? null : p.id)}
+                        className="text-gray-400 hover:text-gray-600 p-1">
+                        <ChevronDown size={16} className={`transition-transform ${isExp ? 'rotate-180' : ''}`} />
+                      </button>
+                    </td>
+                  </tr>,
+
+                  isExp && (
+                    <tr key={`${p.id}-detail`} className="bg-gray-50 border-b border-gray-100">
+                      <td colSpan={8} className="px-6 py-4">
+                        {periodMovements.length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-2">No stock movements in this period</p>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                              Movements in {periodLabel}
+                            </p>
+                            {periodMovements.map(e => (
+                              <div key={e.id} className="flex items-center gap-4 text-xs">
+                                <span className="text-gray-500 w-32 shrink-0">{fmtDateTime(e.date)}</span>
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{e.type}</span>
+                                <span className={`font-black text-sm w-12 ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
+                                  {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
+                                </span>
+                                <span className="text-gray-500">bal: <span className="font-bold text-gray-700">{e.balanceAfter}</span></span>
+                                {e.supplierName && <span className="text-gray-500">· {e.supplierName}</span>}
+                                {e.billNumber && <span className="text-blue-500">· {e.billNumber}</span>}
+                                {e.note && <span className="text-gray-400">— {e.note}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Stock-in History */}
+      <div className="card overflow-hidden p-0">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-800">All Stock Movements — {periodLabel}</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{historyEntries.length} entries</p>
+        </div>
+        {historyEntries.length === 0 ? (
+          <div className="py-14 text-center text-gray-400">
+            <Package size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No stock movements in this period</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {historyEntries.map(e => {
+              const product = products.find(p => p.id === e.productId);
+              return (
+                <div key={e.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${
+                    e.type === 'sale' ? 'bg-red-100 text-red-600' :
+                    e.type === 'purchase' ? 'bg-green-100 text-green-700' :
+                    e.type === 'opening' ? 'bg-blue-100 text-blue-700' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>
+                    {e.type === 'sale' ? '−' : '+'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-gray-800 text-sm">{product?.name || '—'}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{e.type}</span>
+                      {e.supplierName && <span className="text-xs text-gray-500">· {e.supplierName}</span>}
+                      {e.billNumber && e.billNumber !== 'Multiple' && <span className="text-xs text-blue-500">· {e.billNumber}</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {fmtDateTime(e.date)}
+                      {e.note && <span className="ml-2">— {e.note}</span>}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`text-xl font-black ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
+                      {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
+                    </p>
+                    <p className="text-xs text-gray-400">bal: <span className="font-bold text-gray-600">{e.balanceAfter}</span></p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <AddStockModal
+          products={products}
+          onSave={handleAddStock}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+    </div>
+  );
+}
