@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { Search, X, Eye, Printer, Download, Filter } from 'lucide-react';
+import { printBill } from '../utils/printBill';
 
 const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
 const PAYMENT_COLORS = {
@@ -13,6 +14,7 @@ const PAYMENT_COLORS = {
 };
 
 function BillDetailModal({ bill, onClose }) {
+  const { shop } = useApp();
   if (!bill) return null;
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
@@ -61,8 +63,8 @@ function BillDetailModal({ bill, onClose }) {
           </div>
 
           <div className="flex gap-3 mt-5">
-            <button onClick={() => window.print()} className="btn-secondary flex-1 flex items-center justify-center gap-2">
-              <Printer size={16} /> Reprint
+            <button onClick={() => printBill(bill, shop)} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+              <Printer size={16} /> Print / PDF
             </button>
             <button onClick={onClose} className="btn-primary flex-1">Close</button>
           </div>
@@ -73,7 +75,7 @@ function BillDetailModal({ bill, onClose }) {
 }
 
 export default function SalesHistory() {
-  const { bills } = useApp();
+  const { bills, shop } = useApp();
   const [query, setQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all'); // all | today | week | month
@@ -211,7 +213,7 @@ export default function SalesHistory() {
                       <button onClick={() => setSelectedBill(bill)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="View">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => window.print()} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg" title="Reprint">
+                      <button onClick={() => printBill(bill, shop)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg" title="Print / PDF">
                         <Printer size={15} />
                       </button>
                     </div>

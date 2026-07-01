@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { printBill } from '../utils/printBill';
 import {
   User, Phone, Search, Mic, MicOff, ScanLine, Plus, Minus,
   Trash2, X, Check, ChevronRight, ChevronLeft, ChevronDown,
@@ -953,8 +954,8 @@ function ReceiptStep({ bill, customer, onNewBill }) {
       </div>
 
       <div className="flex gap-3 mb-3">
-        <button onClick={() => window.print()} className="btn-secondary flex-1 flex items-center justify-center gap-2">
-          <Printer size={15} /> Print
+        <button onClick={() => printBill(bill, { shopName: bill.shopName, address: bill.shopAddress, gstin: bill.gstin, phone: bill.shopPhone })} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+          <Printer size={15} /> Print / PDF
         </button>
         {customer.phone && (
           <button className="btn-secondary flex-1 flex items-center justify-center gap-2">
