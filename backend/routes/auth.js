@@ -126,7 +126,8 @@ router.post('/firebase-phone-login', authLimiter, async (req, res) => {
     phone = (decoded.phone_number || '').replace('+91', '');
     if (!phone) throw new Error('No phone number in token');
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid Firebase token', detail: err.message });
+    // Use 400 not 401 — 401 is intercepted by the frontend as "session expired"
+    return res.status(400).json({ error: 'Firebase verification failed: ' + err.message });
   }
 
   const result = await query(

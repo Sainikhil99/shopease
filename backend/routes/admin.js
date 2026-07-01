@@ -43,6 +43,16 @@ router.get('/usage', adminAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/test-firebase — checks if Firebase Admin SDK initialised correctly
+router.get('/test-firebase', adminAuth, (req, res) => {
+  const admin = require('../services/firebaseAdmin');
+  res.json({
+    initialised: admin.apps.length > 0,
+    appCount: admin.apps.length,
+    serviceAccountSet: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+  });
+});
+
 // GET /api/admin/test-email — sends a test email to ADMIN_ALERT_EMAIL to verify Resend config
 router.get('/test-email', adminAuth, async (req, res) => {
   if (!process.env.RESEND_API_KEY) {
