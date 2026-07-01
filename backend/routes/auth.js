@@ -160,7 +160,7 @@ router.post('/login',
     const valid        = await bcrypt.compare(password, hashToCheck);
 
     if (!shop || !valid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(400).json({ error: 'Invalid email or password' });
     }
     res.json({ token: signToken(shop.id, shop.phone), shop: { id: shop.id, shopName: shop.shop_name, ownerName: shop.owner_name } });
   }
