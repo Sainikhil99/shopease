@@ -296,20 +296,27 @@ export function AppProvider({ children }) {
         api.get('/api/bills?limit=500'),
         api.get('/api/coupons'),
         api.get('/api/returns?limit=200'),
-      ]).then(([prodsRes, billsRes, couponsRes, retsRes]) => {
+        api.get('/api/stock?limit=2000'),
+      ]).then(([prodsRes, billsRes, couponsRes, retsRes, stockRes]) => {
         const prods = prodsRes.products  || [];
         const bills = billsRes.bills     || [];
         const cpns  = Array.isArray(couponsRes) ? couponsRes : (couponsRes.coupons || []);
         const rets  = retsRes.returns    || [];
+        // Normalize API entries: map createdAt → date so Inventory.jsx filters work
+        const stockEntries = (stockRes.entries || []).map(e => ({
+          ...e, date: e.createdAt,
+        }));
         setProducts(prods);
         setBills(bills);
         setCoupons(cpns);
         setReturns(rets);
+        setStockLedger(stockEntries);
         // Update localStorage cache with fresh data
         safeSet(`shopease_products_${sid}`, prods);
         safeSet(`shopease_bills_${sid}`,    bills);
         safeSet(`shopease_coupons_${sid}`,  cpns);
         safeSet(`shopease_returns_${sid}`,  rets);
+        safeSet(`shopease_stock_${sid}`,    stockEntries);
       }).catch(() => {
         // Backend unreachable — cached data already in state, no action needed
       }).finally(() => setIsLoading(false));
@@ -397,14 +404,27 @@ export function AppProvider({ children }) {
     const id = `p${Date.now()}`;
     setProducts(prev => [...prev, { ...product, id, isActive: true }]);
     if (product.stockQty > 0) {
-      setStockLedger(prev => [...prev, {
+      const entry = {
         id: `sl${Date.now()}`, productId: id, type: 'opening',
         qty: product.stockQty, balanceAfter: product.stockQty,
         date: new Date().toISOString(), note: 'Opening stock',
-        supplierName: '', billNumber: '', costPrice: product.costPrice || 0,
-      }]);
+        supplierName: '', billNumber: '', invoiceNo: '', costPrice: product.costPrice || 0,
+      };
+      setStockLedger(prev => [...prev, entry]);
+      // Sync to backend once the product is created so we have a real product UUID
+      api.post('/api/products', product).then(res => {
+        const realId = res?.id;
+        if (realId) {
+          api.post('/api/stock', {
+            productId: realId, type: 'opening', qty: product.stockQty,
+            balanceAfter: product.stockQty, costPrice: product.costPrice || 0,
+            note: 'Opening stock',
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    } else {
+      api.post('/api/products', product).catch(() => {});
     }
-    api.post('/api/products', product).catch(() => {});
   };
   const updateProduct = (id, updates) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -416,21 +436,30 @@ export function AppProvider({ children }) {
     api.delete(`/api/products/${id}`).catch(() => {});
   };
 
-  const addStockPurchase = (productId, qty, supplierName, note, costPrice) => {
+  const addStockPurchase = (productId, qty, supplierName, note, costPrice, invoiceNo) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
     const newBalance = product.stockQty + qty;
-    // updateProduct already fires the PATCH — no extra API call needed here
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stockQty: newBalance } : p));
     api.put(`/api/products/${productId}`, { stockQty: newBalance }).catch(() => {});
-    setStockLedger(prev => [...prev, {
+    const entry = {
       id: `sl${Date.now()}`, productId, type: 'purchase',
       qty, balanceAfter: newBalance,
       date: new Date().toISOString(),
       note: note || 'Stock added',
       supplierName: supplierName || '',
+      invoiceNo: invoiceNo || '',
       billNumber: '', costPrice: costPrice || product.costPrice || 0,
-    }]);
+    };
+    setStockLedger(prev => [...prev, entry]);
+    // Persist to backend — only if productId is a real UUID (not a local temp id)
+    if (/^[0-9a-f]{8}-/i.test(productId)) {
+      api.post('/api/stock', {
+        productId, type: 'purchase', qty, balanceAfter: newBalance,
+        supplierName: supplierName || null, invoiceNo: invoiceNo || null,
+        costPrice: costPrice || product.costPrice || 0, note: note || 'Stock added',
+      }).catch(() => {});
+    }
   };
 
   // ── Bills ──────────────────────────────────────────────────────────────────
@@ -469,9 +498,19 @@ export function AppProvider({ children }) {
       setProducts(prev => prev.map(p => stockUpdates[p.id] !== undefined ? { ...p, stockQty: stockUpdates[p.id] } : p));
     if (ledgerEntries.length) setStockLedger(prev => [...prev, ...ledgerEntries]);
 
-    // Persist to backend in background — doesn't block the UI
+    // Sync sale ledger entries for products with real UUIDs
+    const stockApiEntries = ledgerEntries.filter(e => /^[0-9a-f]{8}-/i.test(e.productId));
+    if (stockApiEntries.length) {
+      api.post('/api/stock/batch', {
+        entries: stockApiEntries.map(e => ({
+          productId: e.productId, type: 'sale', qty: e.qty,
+          balanceAfter: e.balanceAfter, billNumber: e.billNumber, note: e.note,
+        })),
+      }).catch(() => {});
+    }
+
+    // Persist bill to backend in background — doesn't block the UI
     api.post('/api/bills', bill).catch(() => {
-      // Mark as unsynced so a future sync job can retry
       setBills(prev => prev.map(b => b.id === newBill.id ? { ...b, _offline: true } : b));
     });
 
@@ -512,6 +551,17 @@ export function AppProvider({ children }) {
         ? { ...b, hasReturn: true, returnedAmount: (b.returnedAmount || 0) + returnData.refundAmount }
         : b
     ));
+
+    // Sync return ledger entries for products with real UUIDs
+    const retApiEntries = retLedger.filter(e => /^[0-9a-f]{8}-/i.test(e.productId));
+    if (retApiEntries.length) {
+      api.post('/api/stock/batch', {
+        entries: retApiEntries.map(e => ({
+          productId: e.productId, type: 'return', qty: e.qty,
+          balanceAfter: e.balanceAfter, billNumber: e.billNumber, note: e.note,
+        })),
+      }).catch(() => {});
+    }
 
     // Persist to backend in background
     api.post('/api/returns', returnData).catch(() => {});

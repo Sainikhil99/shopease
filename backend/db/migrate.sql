@@ -128,6 +128,26 @@ CREATE INDEX IF NOT EXISTS idx_returns_shop_id   ON returns(shop_id);
 CREATE INDEX IF NOT EXISTS idx_returns_bill_id   ON returns(original_bill_id);
 CREATE INDEX IF NOT EXISTS idx_return_items_ret  ON return_items(return_id);
 
+-- ── 9. Stock ledger — full movement history (purchase / sale / return / opening)
+-- ON DELETE SET NULL so deleting a product keeps the history rows
+CREATE TABLE IF NOT EXISTS stock_ledger (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  shop_id       UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  product_id    UUID REFERENCES products(id) ON DELETE SET NULL,
+  type          VARCHAR(20) NOT NULL CHECK (type IN ('purchase','sale','return','opening')),
+  qty           INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL DEFAULT 0,
+  supplier_name VARCHAR(255),
+  invoice_no    VARCHAR(100),
+  bill_number   VARCHAR(50),
+  cost_price    DECIMAL(10,2) DEFAULT 0,
+  note          TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_ledger_shop     ON stock_ledger(shop_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_ledger_product  ON stock_ledger(product_id);
+
 -- ── 8. Updated_at trigger for products ───────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$

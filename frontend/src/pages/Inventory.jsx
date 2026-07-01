@@ -479,7 +479,8 @@ export default function Inventory() {
     batch.forEach(item => {
       addStockPurchase(
         item.product.id, item.qtyAdded, item.supplier,
-        item.note, parseFloat(item.costPrice) || item.product.costPrice || 0
+        item.note, parseFloat(item.costPrice) || item.product.costPrice || 0,
+        item.invoice
       );
     });
     setShowAddModal(false);

@@ -102,6 +102,7 @@ app.use('/api/coupons',   require('./routes/coupons'));
 app.use('/api/reports',   require('./routes/reports'));
 app.use('/api/dashboard', require('./routes/reports'));
 app.use('/api/settings',  require('./routes/settings'));
+app.use('/api/stock',     require('./routes/stock'));
 app.use('/api/admin',     require('./routes/admin'));
 
 // ── Health check (used by load balancer / Docker HEALTHCHECK) ─────────────────
