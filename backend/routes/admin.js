@@ -46,8 +46,8 @@ router.get('/usage', adminAuth, async (req, res) => {
 // GET /api/admin/test-firebase — checks if Firebase Admin SDK initialised correctly
 router.get('/test-firebase', adminAuth, (req, res) => {
   try {
-    const admin = require('../services/firebaseAdmin');
-    const apps = admin.apps || [];
+    const { getApps } = require('../services/firebaseAdmin');
+    const apps = getApps();
     res.json({
       initialised: apps.length > 0,
       appCount: apps.length,

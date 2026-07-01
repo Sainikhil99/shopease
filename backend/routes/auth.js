@@ -120,9 +120,9 @@ router.post('/firebase-phone-login', authLimiter, async (req, res) => {
 
   let phone;
   try {
-    const admin   = require('../services/firebaseAdmin');
-    if (!admin.apps.length) throw new Error('Firebase Admin not initialised');
-    const decoded = await admin.auth().verifyIdToken(idToken);
+    const { getApps, getAuth } = require('../services/firebaseAdmin');
+    if (!getApps().length) throw new Error('Firebase Admin not initialised — check FIREBASE_SERVICE_ACCOUNT in Render');
+    const decoded = await getAuth().verifyIdToken(idToken);
     phone = (decoded.phone_number || '').replace('+91', '');
     if (!phone) throw new Error('No phone number in token');
   } catch (err) {
