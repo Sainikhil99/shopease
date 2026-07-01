@@ -45,12 +45,18 @@ router.get('/usage', adminAuth, async (req, res) => {
 
 // GET /api/admin/test-firebase — checks if Firebase Admin SDK initialised correctly
 router.get('/test-firebase', adminAuth, (req, res) => {
-  const admin = require('../services/firebaseAdmin');
-  res.json({
-    initialised: admin.apps.length > 0,
-    appCount: admin.apps.length,
-    serviceAccountSet: !!process.env.FIREBASE_SERVICE_ACCOUNT,
-  });
+  try {
+    const admin = require('../services/firebaseAdmin');
+    const apps = admin.apps || [];
+    res.json({
+      initialised: apps.length > 0,
+      appCount: apps.length,
+      serviceAccountSet: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      serviceAccountLength: (process.env.FIREBASE_SERVICE_ACCOUNT || '').length,
+    });
+  } catch (err) {
+    res.status(200).json({ initialised: false, error: err.message });
+  }
 });
 
 // GET /api/admin/test-email — sends a test email to ADMIN_ALERT_EMAIL to verify Resend config
