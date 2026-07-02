@@ -380,10 +380,12 @@ function UsageBanner() {
 
 // ─── Subscription Panel ───────────────────────────────────────────────────────
 function SubscriptionPanel() {
-  const [shops, setShops]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [marking, setMarking] = useState(null);
-  const [filter, setFilter]   = useState('all');
+  const [shops, setShops]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [marking, setMarking]     = useState(null);
+  const [filter, setFilter]       = useState('all');
+  const [editCharge, setEditCharge] = useState(null); // { shopId, value }
+  const [savingCharge, setSavingCharge] = useState(null);
 
   const fetchShops = () => {
     setLoading(true);
@@ -416,10 +418,27 @@ function SubscriptionPanel() {
     setMarking(null);
   };
 
+  const updateCharge = async (shopId, newCharge) => {
+    setSavingCharge(shopId);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/shops/${shopId}/update-charge`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ADMIN_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ charge: newCharge }),
+      });
+      if (res.ok) {
+        setShops(prev => prev.map(s => s.id === shopId ? { ...s, monthlyCharge: newCharge } : s));
+        setEditCharge(null);
+      }
+    } catch {}
+    setSavingCharge(null);
+  };
+
   const paid     = shops.filter(s => s.subscriptionStatus === 'active').length;
   const expired  = shops.filter(s => s.subscriptionStatus === 'expired').length;
   const expiring = shops.filter(s => s.subscriptionStatus === 'active' && s.daysRemaining <= 7).length;
-  const revenue  = paid * 299;
+  const revenue  = shops.filter(s => s.subscriptionStatus === 'active')
+                        .reduce((sum, s) => sum + (s.monthlyCharge || 299), 0);
 
   const filtered = shops.filter(s => {
     if (filter === 'paid')    return s.subscriptionStatus === 'active';
@@ -435,7 +454,7 @@ function SubscriptionPanel() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Subscriptions</h2>
-          <p className="text-sm text-slate-500 mt-0.5">₹299/month per shop · Mark paid after collecting payment</p>
+          <p className="text-sm text-slate-500 mt-0.5">Per-shop monthly charges · Click a charge to edit · Mark paid after collecting</p>
         </div>
         <button onClick={fetchShops} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-gray-200 rounded-lg px-3 py-2">
           <RefreshCw size={14} /> Refresh
@@ -483,7 +502,7 @@ function SubscriptionPanel() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Shop', 'Owner', 'Phone', 'Paid Until', 'Status', 'Action'].map(h => (
+                  {['Shop', 'Owner', 'Phone', 'Paid Until', 'Charge', 'Status', 'Action'].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
@@ -499,6 +518,34 @@ function SubscriptionPanel() {
                       <td className="px-4 py-3 text-gray-600">{s.ownerName}</td>
                       <td className="px-4 py-3 text-gray-500">{s.phone}</td>
                       <td className="px-4 py-3 text-gray-600">{fmtDate(s.subscriptionPaidUntil)}</td>
+                      {/* Charge — click to edit inline */}
+                      <td className="px-4 py-3">
+                        {editCharge?.shopId === s.id ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500 text-xs">₹</span>
+                            <input
+                              type="number"
+                              value={editCharge.value}
+                              onChange={e => setEditCharge(prev => ({ ...prev, value: e.target.value }))}
+                              className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm font-mono"
+                              min="1" max="99999"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => updateCharge(s.id, parseInt(editCharge.value, 10))}
+                              disabled={savingCharge === s.id}
+                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg font-semibold disabled:opacity-50"
+                            >{savingCharge === s.id ? '…' : 'Save'}</button>
+                            <button onClick={() => setEditCharge(null)} className="text-gray-400 hover:text-gray-600 text-xs px-1">✕</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditCharge({ shopId: s.id, value: s.monthlyCharge || 299 })}
+                            className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline font-semibold"
+                            title="Click to change charge"
+                          >₹{s.monthlyCharge || 299}</button>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {isActive ? (
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${isExpiring ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>

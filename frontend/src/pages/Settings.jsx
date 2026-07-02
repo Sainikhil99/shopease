@@ -182,35 +182,6 @@ export default function Settings() {
           </div>
         </Section>
 
-        {/* Payment Details */}
-        <Section title="Payment Details" icon={CreditCard}>
-          <div className="space-y-4">
-            <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-              These details appear on every bill so customers can pay you via UPI / Google Pay / PhonePe.
-            </p>
-            <Field
-              label="UPI ID"
-              name="upiId"
-              placeholder="yourshop@upi or yourshop@okicici"
-              sub="Customers scan QR or use this ID to pay you"
-            />
-            <Field
-              label="Payment Phone / Google Pay Number"
-              name="paymentPhone"
-              placeholder="9876543210"
-              sub="PhonePe / Google Pay / Paytm number linked to your bank"
-            />
-            {(form.upiId || form.paymentPhone) && (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 space-y-1">
-                <p className="font-semibold text-gray-700">Preview on bill receipt:</p>
-                {form.upiId && <p>UPI ID: <span className="font-mono text-blue-700">{form.upiId}</span></p>}
-                {form.paymentPhone && <p>Google Pay / PhonePe: <span className="font-mono text-blue-700">{form.paymentPhone}</span></p>}
-                <p className="text-gray-400 mt-1">A QR code will be auto-generated on the bill for easy scanning.</p>
-              </div>
-            )}
-          </div>
-        </Section>
-
         {/* My Subscription */}
         <Section title="My Subscription" icon={IndianRupee}>
           <div className="space-y-4">

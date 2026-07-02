@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { query } = require('../db');
-const { sendDailyReport, sendMonthlyReport } = require('./emailService');
+const { sendDailyReport, sendMonthlyReport, sendSubscriptionReminderEmail } = require('./emailService');
 const { checkAndAlert } = require('./usageAlert');
 
 function startCronJobs() {
@@ -55,7 +55,35 @@ function startCronJobs() {
     await checkAndAlert();
   }, { timezone: 'Asia/Kolkata' });
 
-  console.log('[CRON] Scheduled: daily reports at 9 PM IST, monthly on 1st at 8 AM IST, usage check at 9 AM IST');
+  // Subscription reminders: 10 AM IST daily — send email to shops expiring in exactly 7 or 2 days
+  cron.schedule('0 10 * * *', async () => {
+    console.log('[CRON] Running subscription reminder job...');
+    try {
+      const shops = await query(`
+        SELECT * FROM shops
+        WHERE subscription_paid_until IN (
+          CURRENT_DATE + INTERVAL '7 days',
+          CURRENT_DATE + INTERVAL '2 days'
+        )
+        AND (report_email IS NOT NULL OR email IS NOT NULL)
+      `);
+      for (const shop of shops.rows) {
+        const daysLeft = Math.round(
+          (new Date(shop.subscription_paid_until) - new Date()) / (1000 * 60 * 60 * 24)
+        );
+        try {
+          await sendSubscriptionReminderEmail(shop, daysLeft);
+          console.log(`[CRON] Subscription reminder sent to ${shop.shop_name} (${daysLeft} days left)`);
+        } catch (err) {
+          console.error(`[CRON] Subscription reminder failed for ${shop.id}:`, err.message);
+        }
+      }
+    } catch (err) {
+      console.error('[CRON] Subscription reminder job error:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+
+  console.log('[CRON] Scheduled: daily at 9 PM IST, monthly on 1st at 8 AM IST, usage at 9 AM IST, sub reminders at 10 AM IST');
 }
 
 module.exports = { startCronJobs };

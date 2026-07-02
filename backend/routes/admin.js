@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { query } = require('../db');
 const { sendEmail } = require('../services/resendEmail');
+const { sendPriceChangeEmail } = require('../services/emailService');
 
 const FREE_SHOP_LIMIT = 50;
 const FREE_DB_MB = 500;
@@ -122,6 +123,37 @@ router.post('/shops/:id/mark-paid', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[Admin] Mark paid error:', err.message);
     res.status(500).json({ error: 'Could not update subscription' });
+  }
+});
+
+// POST /api/admin/shops/:id/update-charge — change monthly_charge and email the owner
+router.post('/shops/:id/update-charge', adminAuth, async (req, res) => {
+  const newCharge = parseInt(req.body.charge, 10);
+  if (!newCharge || newCharge < 1 || newCharge > 99999) {
+    return res.status(400).json({ error: 'Invalid charge amount (must be 1–99999)' });
+  }
+  try {
+    const existing = await query('SELECT * FROM shops WHERE id=$1', [req.params.id]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Shop not found' });
+    const shop = existing.rows[0];
+    const oldCharge = shop.monthly_charge || 299;
+
+    const result = await query(
+      'UPDATE shops SET monthly_charge=$1 WHERE id=$2 RETURNING id, shop_name, owner_name, monthly_charge',
+      [newCharge, req.params.id]
+    );
+
+    // Notify owner only if the charge actually changed and they have an email
+    if (newCharge !== oldCharge && (shop.email || shop.report_email)) {
+      sendPriceChangeEmail(shop, oldCharge, newCharge).catch(err =>
+        console.error('[Admin] Price-change email failed:', err.message)
+      );
+    }
+
+    res.json({ ...result.rows[0], oldCharge });
+  } catch (err) {
+    console.error('[Admin] Update charge error:', err.message);
+    res.status(500).json({ error: 'Could not update charge' });
   }
 });
 
