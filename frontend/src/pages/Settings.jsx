@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { api } from '../utils/api';
 import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle } from 'lucide-react';
 
 const ADMIN_UPI   = import.meta.env.VITE_ADMIN_UPI_ID    || '';
@@ -29,20 +28,29 @@ export default function Settings() {
   // Sync form when shop changes (e.g. after login/account switch)
   useEffect(() => { setForm({ ...shop }); }, [shop?.id]);
 
-  // Fetch full settings (includes subscription status + UPI fields not in JWT)
+  // Fetch full settings (includes subscription status + UPI fields not in JWT).
+  // Uses raw fetch() — NOT the api helper — so a 401 here never triggers the
+  // global session-expired logout handler and causes an infinite login loop.
   useEffect(() => {
-    api.get('/api/settings').then(data => {
-      setSub({
-        paidUntil: data.subscriptionPaidUntil,
-        status:    data.subscriptionStatus,
-        daysLeft:  parseInt(data.daysRemaining ?? 0),
-      });
-      setForm(prev => ({
-        ...prev,
-        upiId:        data.upiId        || '',
-        paymentPhone: data.paymentPhone || '',
-      }));
-    }).catch(() => {});
+    const token = localStorage.getItem('shopease_token');
+    if (!token || token.startsWith('demo-')) return;
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    fetch(`${base}/api/settings`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        setSub({
+          paidUntil: data.subscriptionPaidUntil,
+          status:    data.subscriptionStatus,
+          daysLeft:  parseInt(data.daysRemaining ?? 0),
+        });
+        setForm(prev => ({
+          ...prev,
+          upiId:        data.upiId        || '',
+          paymentPhone: data.paymentPhone || '',
+        }));
+      })
+      .catch(() => {});
   }, [shop?.id]);
 
   const handleSave = (e) => {
