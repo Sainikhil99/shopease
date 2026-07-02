@@ -139,8 +139,8 @@ function loadStockLedger(shopId) {
 }
 
 export function AppProvider({ children }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('shopease_token'));
-  const [isAdmin, setIsAdmin] = useState(() => !!localStorage.getItem('shopease_admin'));
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!sessionStorage.getItem('shopease_token'));
+  const [isAdmin, setIsAdmin]       = useState(() => !!sessionStorage.getItem('shopease_admin'));
 
   // Prevents double-submission if the user taps "Complete Sale" twice quickly
   const _billInFlight = useRef(false);
@@ -158,7 +158,7 @@ export function AppProvider({ children }) {
   // ledger entries are kept only if their product exists in this shop's products.
   const [products, setProducts] = useState(() => {
     const id = currentSavedShop?.id;
-    if (!id || !localStorage.getItem('shopease_token')) return MOCK_PRODUCTS;
+    if (!id || !sessionStorage.getItem('shopease_token')) return MOCK_PRODUCTS;
     try {
       const saved = localStorage.getItem(`shopease_products_${id}`);
       if (saved) return JSON.parse(saved);
@@ -167,7 +167,7 @@ export function AppProvider({ children }) {
   });
   const [bills, setBills] = useState(() => {
     const id = currentSavedShop?.id;
-    if (!id || !localStorage.getItem('shopease_token')) return MOCK_BILLS;
+    if (!id || !sessionStorage.getItem('shopease_token')) return MOCK_BILLS;
     try {
       const saved = localStorage.getItem(`shopease_bills_${id}`);
       if (saved) return JSON.parse(saved);
@@ -176,7 +176,7 @@ export function AppProvider({ children }) {
   });
   const [coupons, setCoupons] = useState(() => {
     const id = currentSavedShop?.id;
-    if (!id || !localStorage.getItem('shopease_token')) return MOCK_COUPONS;
+    if (!id || !sessionStorage.getItem('shopease_token')) return MOCK_COUPONS;
     try {
       const saved = localStorage.getItem(`shopease_coupons_${id}`);
       if (saved) return JSON.parse(saved);
@@ -185,7 +185,7 @@ export function AppProvider({ children }) {
   });
   const [returns, setReturns] = useState(() => {
     const id = currentSavedShop?.id;
-    if (!id || !localStorage.getItem('shopease_token')) return [];
+    if (!id || !sessionStorage.getItem('shopease_token')) return [];
     try {
       // Build the valid bill ID set for this shop to filter out foreign returns
       const billsRaw = localStorage.getItem(`shopease_bills_${id}`);
@@ -198,7 +198,7 @@ export function AppProvider({ children }) {
   });
   const [stockLedger, setStockLedger] = useState(() => {
     const id = currentSavedShop?.id;
-    if (!id || !localStorage.getItem('shopease_token')) return [];
+    if (!id || !sessionStorage.getItem('shopease_token')) return [];
     try {
       // Build valid product ID set to filter out foreign ledger entries
       const prodsRaw = localStorage.getItem(`shopease_products_${id}`);
@@ -264,7 +264,7 @@ export function AppProvider({ children }) {
   // When token is absent (admin panel, demo mode), we skip the API refresh.
   const loginAsShop = useCallback((shopData, token) => {
     const authToken = token || `demo-${shopData.id}-${Date.now()}`;
-    localStorage.setItem('shopease_token', authToken);
+    sessionStorage.setItem('shopease_token', authToken);
     safeSet('shopease_current_shop', shopData);
     setShop(shopData);
     // Set isLoggedIn immediately so protected routes render without redirect
@@ -325,7 +325,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    safeRemove('shopease_token');
+    sessionStorage.removeItem('shopease_token');
     safeRemove('shopease_current_shop');
     // Wipe all in-memory state so no data leaks to the next login session
     setProducts([]);
@@ -338,7 +338,7 @@ export function AppProvider({ children }) {
 
   // Kept for backward compatibility (Register still calls this)
   const login = (token) => {
-    localStorage.setItem('shopease_token', token);
+    sessionStorage.setItem('shopease_token', token);
     setIsLoggedIn(true);
   };
 
@@ -347,19 +347,19 @@ export function AppProvider({ children }) {
     email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && !!ADMIN_KEY && password === ADMIN_KEY;
 
   // Full login — call this only AFTER OTP is confirmed.
-  const adminLogin = (email, password) => {
+  const adminLogin = useCallback((email, password) => {
     if (checkAdminCredentials(email, password)) {
-      localStorage.setItem('shopease_admin', 'true');
+      sessionStorage.setItem('shopease_admin', 'true');
       setIsAdmin(true);
       return true;
     }
     return false;
-  };
+  }, [checkAdminCredentials]);
 
-  const adminLogout = () => {
-    localStorage.removeItem('shopease_admin');
+  const adminLogout = useCallback(() => {
+    sessionStorage.removeItem('shopease_admin');
     setIsAdmin(false);
-  };
+  }, []);
 
   // ── Registration ───────────────────────────────────────────────────────────
   const registerShop = ({ ownerName, phone, email, password, shopName, address, gstin }) => {
@@ -643,13 +643,36 @@ export function AppProvider({ children }) {
   // server never goes to sleep (Render sleeps after 15 min of inactivity).
   // This prevents the 30-60s cold-start delay when switching pages.
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn && !isAdmin) return;
     const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const ping = () => fetch(`${base}/health`).catch(() => {});
     ping();
     const id = setInterval(ping, 9 * 60 * 1000);
     return () => clearInterval(id);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isAdmin]);
+
+  // Auto-logout after 10 minutes of inactivity OR when the tab is closed
+  // (tab-close is handled by sessionStorage — tokens clear automatically).
+  // Here we handle the inactivity case with an event-driven timer.
+  const _doLogout = useRef(null);
+  _doLogout.current = isAdmin ? adminLogout : logout;
+
+  useEffect(() => {
+    if (!isLoggedIn && !isAdmin) return;
+    let timer;
+    const IDLE = 10 * 60 * 1000; // 10 minutes
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => _doLogout.current?.(), IDLE);
+    };
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset(); // start the clock
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
+  }, [isLoggedIn, isAdmin]);
 
   return (
     <AppContext.Provider value={{

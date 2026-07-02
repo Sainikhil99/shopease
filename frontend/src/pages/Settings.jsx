@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle, Copy, MessageCircle } from 'lucide-react';
 
-const ADMIN_UPI   = import.meta.env.VITE_ADMIN_UPI_ID    || '';
-const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PAYMENT_PHONE || '';
+const ADMIN_UPI       = import.meta.env.VITE_ADMIN_UPI_ID          || '';
+const ADMIN_PHONE     = import.meta.env.VITE_ADMIN_PAYMENT_PHONE   || '';
+const RAZORPAY_LINK   = import.meta.env.VITE_RAZORPAY_PAYMENT_LINK || '';
 
 function Section({ title, icon: Icon, children }) {
   return (
@@ -24,6 +25,8 @@ export default function Settings() {
   const [form, setForm]   = useState({ ...shop });
   const [saved, setSaved] = useState(false);
   const [sub, setSub]     = useState(null);
+  const [payTab, setPayTab] = useState('upi'); // 'upi' | 'card'
+  const [copied, setCopied] = useState('');   // which field was just copied
 
   // Sync form when shop changes (e.g. after login/account switch)
   useEffect(() => { setForm({ ...shop }); }, [shop?.id]);
@@ -32,7 +35,7 @@ export default function Settings() {
   // Uses raw fetch() — NOT the api helper — so a 401 here never triggers the
   // global session-expired logout handler and causes an infinite login loop.
   useEffect(() => {
-    const token = localStorage.getItem('shopease_token');
+    const token = sessionStorage.getItem('shopease_token');
     if (!token || token.startsWith('demo-')) return;
     const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     fetch(`${base}/api/settings`, { headers: { Authorization: `Bearer ${token}` } })
@@ -52,6 +55,13 @@ export default function Settings() {
       })
       .catch(() => {});
   }, [shop?.id]);
+
+  const copy = (text, label) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(''), 2000);
+    });
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -204,135 +214,190 @@ export default function Settings() {
         {/* My Subscription */}
         <Section title="My Subscription" icon={IndianRupee}>
           <div className="space-y-4">
+
+            {/* Status banner */}
             {sub ? (
-              <>
-                {/* Status banner */}
-                <div className={`rounded-xl p-4 border flex items-center gap-4 ${
-                  sub.status === 'active' && sub.daysLeft > 7  ? 'bg-green-50 border-green-200' :
-                  sub.status === 'active' && sub.daysLeft <= 7 ? 'bg-amber-50 border-amber-200' :
-                                                                  'bg-red-50 border-red-200'
+              <div className={`rounded-xl p-4 border flex items-center gap-4 ${
+                sub.status === 'active' && sub.daysLeft > 7  ? 'bg-green-50 border-green-200' :
+                sub.status === 'active' && sub.daysLeft <= 7 ? 'bg-amber-50 border-amber-200' :
+                                                                'bg-red-50 border-red-200'
+              }`}>
+                <div className={`shrink-0 ${
+                  sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-500' :
+                  sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-500' : 'text-red-500'
                 }`}>
-                  <div className={`shrink-0 ${
-                    sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-500' :
-                    sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-500' :
-                                                                    'text-red-500'
+                  {sub.status === 'active' && sub.daysLeft > 7  ? <CheckCircle size={28} /> :
+                   sub.status === 'active' && sub.daysLeft <= 7 ? <Clock size={28} /> :
+                                                                   <XCircle size={28} />}
+                </div>
+                <div>
+                  <p className={`font-bold text-sm ${
+                    sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-800' :
+                    sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-800' : 'text-red-800'
                   }`}>
-                    {sub.status === 'active' && sub.daysLeft > 7  ? <CheckCircle size={28} /> :
-                     sub.status === 'active' && sub.daysLeft <= 7 ? <Clock size={28} /> :
-                                                                     <XCircle size={28} />}
+                    {sub.status === 'active'
+                      ? sub.daysLeft > 7
+                        ? `Active — ${sub.daysLeft} days remaining`
+                        : `Expiring soon — only ${sub.daysLeft} days left!`
+                      : 'Subscription Expired'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {sub.paidUntil
+                      ? `Valid until ${new Date(sub.paidUntil).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                      : 'No active subscription'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-16 bg-gray-50 border border-gray-200 rounded-xl animate-pulse" />
+            )}
+
+            {/* ─── Renew / Pay card ─────────────────────────────────────────── */}
+            {(ADMIN_UPI || ADMIN_PHONE || RAZORPAY_LINK) && (
+              <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+
+                {/* Card header */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4">
+                  <p className="text-white font-bold text-base">Renew your plan</p>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-white text-2xl font-extrabold">₹299</span>
+                    <span className="text-blue-200 text-sm">/ month</span>
                   </div>
-                  <div>
-                    <p className={`font-bold text-sm ${
-                      sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-800' :
-                      sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-800' :
-                                                                      'text-red-800'
-                    }`}>
-                      {sub.status === 'active'
-                        ? sub.daysLeft > 7
-                          ? `Active — ${sub.daysLeft} days remaining`
-                          : `Expiring soon — only ${sub.daysLeft} days left!`
-                        : 'Subscription Expired'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {sub.paidUntil
-                        ? `Valid until ${new Date(sub.paidUntil).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`
-                        : 'No active subscription'}
-                    </p>
-                  </div>
+                  <p className="text-blue-100 text-xs mt-1">First month is free — no card required</p>
                 </div>
 
-                {/* Renew / Pay section */}
-                {(ADMIN_UPI || ADMIN_PHONE) && (
-                  <div className="border border-blue-100 rounded-xl overflow-hidden">
-                    <div className="bg-blue-600 px-4 py-2.5">
-                      <p className="text-white font-semibold text-sm">Renew your plan — ₹299 / month</p>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      {/* Step 1 */}
-                      <div className="flex gap-3">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
-                        <div className="space-y-2 w-full">
-                          <p className="text-sm font-medium text-gray-700">Pay ₹299 via UPI</p>
-                          {/* QR + details side by side */}
-                          <div className="flex items-start gap-4">
-                            {ADMIN_UPI && (
-                              <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`upi://pay?pa=${ADMIN_UPI}&pn=ShopEase&am=299&cu=INR`)}`}
-                                alt="Pay ShopEase QR"
-                                className="w-24 h-24 rounded-lg border border-gray-200 shrink-0"
-                              />
-                            )}
-                            <div className="space-y-2 min-w-0">
-                              {ADMIN_UPI && (
-                                <div>
-                                  <p className="text-xs text-gray-400 mb-0.5">UPI ID</p>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-sm font-semibold text-gray-800 break-all">{ADMIN_UPI}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => navigator.clipboard?.writeText(ADMIN_UPI)}
-                                      className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                                      title="Copy UPI ID"
-                                    >
-                                      <Copy size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {ADMIN_PHONE && (
-                                <div>
-                                  <p className="text-xs text-gray-400 mb-0.5">Google Pay / PhonePe / Paytm</p>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-sm font-semibold text-gray-800">{ADMIN_PHONE}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => navigator.clipboard?.writeText(ADMIN_PHONE)}
-                                      className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                                      title="Copy number"
-                                    >
-                                      <Copy size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                {/* Payment method tabs */}
+                <div className="flex border-b border-gray-200 bg-gray-50">
+                  {(ADMIN_UPI || ADMIN_PHONE) && (
+                    <button
+                      type="button"
+                      onClick={() => setPayTab('upi')}
+                      className={`flex-1 py-3 text-sm font-semibold transition-all ${
+                        payTab === 'upi'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      UPI / Google Pay
+                    </button>
+                  )}
+                  {RAZORPAY_LINK && (
+                    <button
+                      type="button"
+                      onClick={() => setPayTab('card')}
+                      className={`flex-1 py-3 text-sm font-semibold transition-all ${
+                        payTab === 'card'
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Credit / Debit Card
+                    </button>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-5">
+
+                  {/* ── UPI Tab ── */}
+                  {payTab === 'upi' && (ADMIN_UPI || ADMIN_PHONE) && (
+                    <div className="space-y-4">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 1 — Pay ₹299 via UPI</p>
+
+                      <div className="flex gap-5 items-start">
+                        {/* QR code */}
+                        {ADMIN_UPI && (
+                          <div className="shrink-0 text-center">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${ADMIN_UPI}&pn=ShopEase&am=299&cu=INR`)}`}
+                              alt="UPI QR"
+                              className="w-28 h-28 rounded-xl border-2 border-gray-200"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">Scan to pay ₹299</p>
                           </div>
-                        </div>
-                      </div>
+                        )}
 
-                      {/* Step 2 */}
-                      <div className="flex gap-3">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">2</span>
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Send payment screenshot on WhatsApp</p>
+                        {/* UPI details */}
+                        <div className="flex-1 space-y-3 min-w-0">
+                          {ADMIN_UPI && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">UPI ID</p>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm font-semibold text-gray-800 break-all flex-1">{ADMIN_UPI}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copy(ADMIN_UPI, 'upi')}
+                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${
+                                    copied === 'upi' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'
+                                  }`}
+                                >
+                                  {copied === 'upi' ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           {ADMIN_PHONE && (
-                            <a
-                              href={`https://wa.me/91${ADMIN_PHONE.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ShopEase! I've paid ₹299 for my subscription renewal. Shop: ${shop?.shopName || ''} | Phone: ${shop?.phone || ''}\n[Please attach your payment screenshot]`)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                            >
-                              <MessageCircle size={15} /> Send on WhatsApp
-                            </a>
-                          )}
-                          {!ADMIN_PHONE && (
-                            <p className="text-xs text-gray-400">Contact ShopEase support with your payment screenshot.</p>
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Google Pay / PhonePe / Paytm</p>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm font-semibold text-gray-800 flex-1">{ADMIN_PHONE}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copy(ADMIN_PHONE, 'phone')}
+                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${
+                                    copied === 'phone' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'
+                                  }`}
+                                >
+                                  {copied === 'phone' ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="flex gap-3">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">3</span>
-                        <p className="text-sm text-gray-600">Your account will be activated within a few hours.</p>
                       </div>
                     </div>
+                  )}
+
+                  {/* ── Card Tab ── */}
+                  {payTab === 'card' && RAZORPAY_LINK && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 1 — Pay ₹299 via Card</p>
+                      <p className="text-sm text-gray-600">
+                        Click below to open our secure payment page. You can pay with any credit card, debit card, or net banking.
+                      </p>
+                      <a
+                        href={RAZORPAY_LINK}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
+                      >
+                        <CreditCard size={16} /> Pay ₹299 via Card / Net Banking
+                      </a>
+                      <p className="text-[10px] text-gray-400 text-center">Powered by Razorpay · 256-bit SSL · All major cards accepted</p>
+                    </div>
+                  )}
+
+                  {/* ── After payment — always shown ── */}
+                  <div className="border-t border-gray-100 pt-4 space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 2 — Confirm your payment</p>
+                    <p className="text-sm text-gray-600">Send a screenshot of your payment on WhatsApp. We'll activate your account within a few hours.</p>
+                    {ADMIN_PHONE ? (
+                      <a
+                        href={`https://wa.me/91${ADMIN_PHONE.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ShopEase! I've paid ₹299 for my subscription renewal.\nShop: ${shop?.shopName || ''}\nPhone: ${shop?.phone || ''}\n\n[Attach your payment screenshot]`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
+                      >
+                        <MessageCircle size={16} /> Send Screenshot on WhatsApp
+                      </a>
+                    ) : (
+                      <p className="text-xs text-gray-400">Contact ShopEase support with your payment confirmation.</p>
+                    )}
                   </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-gray-400">Loading subscription info…</p>
+
+                </div>
+              </div>
             )}
+
           </div>
         </Section>
 

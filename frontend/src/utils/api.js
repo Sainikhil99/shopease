@@ -12,7 +12,7 @@ export class ApiError extends Error {
 }
 
 async function apiFetch(path, { method = 'GET', body } = {}) {
-  const token = localStorage.getItem('shopease_token');
+  const token = sessionStorage.getItem('shopease_token');
 
   let res;
   try {
@@ -31,7 +31,7 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
 
   if (res.status === 401) {
     // Token expired — fire an event so AppContext can clear auth state
-    localStorage.removeItem('shopease_token');
+    sessionStorage.removeItem('shopease_token');
     localStorage.removeItem('shopease_current_shop');
     window.dispatchEvent(new Event('shopease:session-expired'));
     throw new ApiError('Session expired. Please log in again.', 401);
