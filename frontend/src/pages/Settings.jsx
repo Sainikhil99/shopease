@@ -187,7 +187,7 @@ export default function Settings() {
           <div className="space-y-4">
 
             {/* Status banner */}
-            {sub ? (
+            {sub && (
               <div className={`rounded-xl p-4 border flex items-center gap-4 ${
                 sub.status === 'active' && sub.daysLeft > 7  ? 'bg-green-50 border-green-200' :
                 sub.status === 'active' && sub.daysLeft <= 7 ? 'bg-amber-50 border-amber-200' :
@@ -219,8 +219,6 @@ export default function Settings() {
                   </p>
                 </div>
               </div>
-            ) : (
-              <div className="h-16 bg-gray-50 border border-gray-200 rounded-xl animate-pulse" />
             )}
 
             {/* ─── Renew / Pay card ─────────────────────────────────────────── */}
