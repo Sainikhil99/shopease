@@ -80,4 +80,49 @@ router.get('/test-email', adminAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/shops — all shops with subscription status (for billing panel)
+router.get('/shops', adminAuth, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT
+        id, owner_name, shop_name, phone, email, address, gstin,
+        created_at,
+        COALESCE(monthly_charge, 299) AS monthly_charge,
+        subscription_paid_until,
+        CASE
+          WHEN subscription_paid_until >= CURRENT_DATE THEN 'active'
+          ELSE 'expired'
+        END AS subscription_status,
+        (subscription_paid_until - CURRENT_DATE)::int AS days_remaining
+      FROM shops
+      ORDER BY subscription_paid_until ASC NULLS FIRST
+    `);
+    res.json({ shops: result.rows });
+  } catch (err) {
+    console.error('[Admin] Shops list error:', err.message);
+    res.status(500).json({ error: 'Could not fetch shops' });
+  }
+});
+
+// POST /api/admin/shops/:id/mark-paid — extend subscription by N months (default 1)
+router.post('/shops/:id/mark-paid', adminAuth, async (req, res) => {
+  const months = Math.max(1, Math.min(12, parseInt(req.body.months) || 1));
+  try {
+    const result = await query(`
+      UPDATE shops
+      SET subscription_paid_until =
+        GREATEST(CURRENT_DATE, COALESCE(subscription_paid_until, CURRENT_DATE))
+        + ($2::int * INTERVAL '1 month')
+      WHERE id = $1
+      RETURNING id, shop_name, owner_name, subscription_paid_until,
+        (subscription_paid_until - CURRENT_DATE)::int AS days_remaining
+    `, [req.params.id, months]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Shop not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[Admin] Mark paid error:', err.message);
+    res.status(500).json({ error: 'Could not update subscription' });
+  }
+});
+
 module.exports = router;

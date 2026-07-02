@@ -6,6 +6,7 @@ import {
   ToggleLeft, ToggleRight, X, Check, Eye, EyeOff, Plus,
   ChevronDown, ChevronUp, Phone, Mail, FileText, Calendar, Activity,
   Lock, AlertCircle, AlertTriangle, TrendingUp, Database,
+  IndianRupee, CheckCircle, XCircle, Clock, RefreshCw,
 } from 'lucide-react';
 
 // ─── Shared field component (outside modals to prevent re-mount on keystroke) ─
@@ -377,6 +378,160 @@ function UsageBanner() {
   );
 }
 
+// ─── Subscription Panel ───────────────────────────────────────────────────────
+function SubscriptionPanel() {
+  const [shops, setShops]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [marking, setMarking] = useState(null);
+  const [filter, setFilter]   = useState('all');
+
+  const fetchShops = () => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/admin/shops`, {
+      headers: { Authorization: `Bearer ${ADMIN_KEY}` },
+    })
+      .then(r => r.ok ? r.json() : { shops: [] })
+      .then(d => { setShops(d.shops || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchShops(); }, []);
+
+  const markPaid = async (shopId, months = 1) => {
+    setMarking(shopId);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/shops/${shopId}/mark-paid`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ADMIN_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShops(prev => prev.map(s => s.id === shopId
+          ? { ...s, subscriptionPaidUntil: data.subscriptionPaidUntil, subscriptionStatus: 'active', daysRemaining: data.daysRemaining }
+          : s
+        ));
+      }
+    } catch {}
+    setMarking(null);
+  };
+
+  const paid     = shops.filter(s => s.subscriptionStatus === 'active').length;
+  const expired  = shops.filter(s => s.subscriptionStatus === 'expired').length;
+  const expiring = shops.filter(s => s.subscriptionStatus === 'active' && s.daysRemaining <= 7).length;
+  const revenue  = paid * 299;
+
+  const filtered = shops.filter(s => {
+    if (filter === 'paid')    return s.subscriptionStatus === 'active';
+    if (filter === 'expired') return s.subscriptionStatus === 'expired';
+    if (filter === 'soon')    return s.subscriptionStatus === 'active' && s.daysRemaining <= 7;
+    return true;
+  });
+
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Subscriptions</h2>
+          <p className="text-sm text-slate-500 mt-0.5">₹299/month per shop · Mark paid after collecting payment</p>
+        </div>
+        <button onClick={fetchShops} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-gray-200 rounded-lg px-3 py-2">
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+
+      {/* Revenue stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        {[
+          { icon: IndianRupee, label: 'Expected / Month', value: `₹${revenue.toLocaleString('en-IN')}`, color: 'bg-green-600' },
+          { icon: CheckCircle, label: 'Paid / Active',    value: paid,    color: 'bg-blue-600' },
+          { icon: XCircle,     label: 'Expired',          value: expired, color: 'bg-red-500' },
+          { icon: Clock,       label: 'Expiring ≤7 days', value: expiring, color: 'bg-amber-500' },
+        ].map(({ icon: Icon, label, value, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center shrink-0`}>
+              <Icon size={18} className="text-white" />
+            </div>
+            <div>
+              <div className="text-xl font-bold text-gray-900">{value}</div>
+              <div className="text-xs text-gray-500">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex bg-gray-100 rounded-lg p-1 gap-1 w-fit mb-4">
+        {[['all','All'],['paid','Paid'],['expired','Expired'],['soon','Expiring Soon']].map(([v,l]) => (
+          <button key={v} onClick={() => setFilter(v)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${filter === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="py-12 text-center text-gray-400 text-sm">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-12 text-center text-gray-400 text-sm">No shops in this filter</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  {['Shop', 'Owner', 'Phone', 'Paid Until', 'Status', 'Action'].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map(s => {
+                  const isActive  = s.subscriptionStatus === 'active';
+                  const days      = parseInt(s.daysRemaining ?? 0);
+                  const isExpiring = isActive && days <= 7;
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-gray-800">{s.shopName}</td>
+                      <td className="px-4 py-3 text-gray-600">{s.ownerName}</td>
+                      <td className="px-4 py-3 text-gray-500">{s.phone}</td>
+                      <td className="px-4 py-3 text-gray-600">{fmtDate(s.subscriptionPaidUntil)}</td>
+                      <td className="px-4 py-3">
+                        {isActive ? (
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${isExpiring ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                            {isExpiring ? <Clock size={10} /> : <CheckCircle size={10} />}
+                            {isExpiring ? `Expires in ${days}d` : `Active · ${days}d left`}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-600">
+                            <XCircle size={10} /> Expired
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => markPaid(s.id, 1)}
+                          disabled={marking === s.id}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white disabled:opacity-50 transition-colors whitespace-nowrap">
+                          <IndianRupee size={11} />
+                          {marking === s.id ? 'Saving…' : 'Mark Paid +1 Month'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Admin Layout ─────────────────────────────────────────────────────────────
 function AdminLayout({ children }) {
   const { adminLogout } = useApp();
@@ -529,6 +684,8 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <SubscriptionPanel />
 
       {editingShop && (
         <EditShopModal shop={editingShop} onSave={handleSave} onClose={() => setEditingShop(null)} />

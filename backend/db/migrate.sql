@@ -158,3 +158,9 @@ DROP TRIGGER IF EXISTS products_updated_at ON products;
 CREATE TRIGGER products_updated_at
   BEFORE UPDATE ON products
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ── 10. Subscription tracking ─────────────────────────────────────────────────
+-- New shops get 30-day free trial via DEFAULT. Existing shops get 30 days grace.
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS subscription_paid_until DATE DEFAULT (CURRENT_DATE + INTERVAL '30 days');
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS monthly_charge INTEGER DEFAULT 299;
+UPDATE shops SET subscription_paid_until = CURRENT_DATE + INTERVAL '30 days' WHERE subscription_paid_until IS NULL;

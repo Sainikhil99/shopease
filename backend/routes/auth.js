@@ -102,11 +102,14 @@ router.post('/verify-otp',
     }
     await deleteOTP(phone); // one-time use
 
-    const result = await query('SELECT id, shop_name, owner_name, phone FROM shops WHERE phone = $1', [phone]);
+    const result = await query('SELECT id, shop_name, owner_name, phone, subscription_paid_until FROM shops WHERE phone = $1', [phone]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No shop found for this number. Please register first.' });
     }
     const shop = result.rows[0];
+    if (shop.subscription_paid_until && new Date(shop.subscription_paid_until) < new Date(new Date().toDateString())) {
+      return res.status(402).json({ error: 'Subscription expired. Contact ShopEase to renew your plan.' });
+    }
     res.json({ token: signToken(shop.id, shop.phone), shop: { id: shop.id, shopName: shop.shop_name, ownerName: shop.owner_name } });
   }
 );
@@ -131,13 +134,16 @@ router.post('/firebase-phone-login', authLimiter, async (req, res) => {
   }
 
   const result = await query(
-    'SELECT id, shop_name, owner_name, phone FROM shops WHERE phone = $1',
+    'SELECT id, shop_name, owner_name, phone, subscription_paid_until FROM shops WHERE phone = $1',
     [phone]
   );
   if (!result.rows.length) {
     return res.status(404).json({ error: 'No shop found for this number. Please register first.' });
   }
   const shop = result.rows[0];
+  if (shop.subscription_paid_until && new Date(shop.subscription_paid_until) < new Date(new Date().toDateString())) {
+    return res.status(402).json({ error: 'Subscription expired. Contact ShopEase to renew your plan.' });
+  }
   res.json({ token: signToken(shop.id, shop.phone), shop: { id: shop.id, shopName: shop.shop_name, ownerName: shop.owner_name } });
 });
 
@@ -151,7 +157,7 @@ router.post('/login',
     const { email, password } = req.body;
 
     const result = await query(
-      'SELECT id, shop_name, owner_name, phone, password_hash FROM shops WHERE email = $1',
+      'SELECT id, shop_name, owner_name, phone, password_hash, subscription_paid_until FROM shops WHERE email = $1',
       [email]
     );
     // Always run bcrypt even on no-match to prevent timing attacks
@@ -161,6 +167,9 @@ router.post('/login',
 
     if (!shop || !valid) {
       return res.status(400).json({ error: 'Invalid email or password' });
+    }
+    if (shop.subscription_paid_until && new Date(shop.subscription_paid_until) < new Date(new Date().toDateString())) {
+      return res.status(402).json({ error: 'Subscription expired. Contact ShopEase to renew your plan.' });
     }
     res.json({ token: signToken(shop.id, shop.phone), shop: { id: shop.id, shopName: shop.shop_name, ownerName: shop.owner_name } });
   }
