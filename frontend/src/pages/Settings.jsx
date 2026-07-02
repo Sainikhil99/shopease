@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle, Copy, MessageCircle } from 'lucide-react';
+import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle, Copy } from 'lucide-react';
 
 const ADMIN_UPI       = import.meta.env.VITE_ADMIN_UPI_ID          || '';
 const ADMIN_PHONE     = import.meta.env.VITE_ADMIN_PAYMENT_PHONE   || '';
@@ -232,48 +232,41 @@ export default function Settings() {
                     <span className="text-white text-2xl font-extrabold">₹299</span>
                     <span className="text-blue-200 text-sm">/ month</span>
                   </div>
-                  <p className="text-blue-100 text-xs mt-1">First month is free — no card required</p>
+                  <p className="text-blue-100 text-xs mt-1">First month is free · Your account activates within a few hours after payment</p>
                 </div>
 
-                {/* Payment method tabs */}
+                {/* Payment method tabs — UPI always shown; Card always shown */}
                 <div className="flex border-b border-gray-200 bg-gray-50">
-                  {(ADMIN_UPI || ADMIN_PHONE) && (
-                    <button
-                      type="button"
-                      onClick={() => setPayTab('upi')}
-                      className={`flex-1 py-3 text-sm font-semibold transition-all ${
-                        payTab === 'upi'
-                          ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      UPI / Google Pay
-                    </button>
-                  )}
-                  {RAZORPAY_LINK && (
-                    <button
-                      type="button"
-                      onClick={() => setPayTab('card')}
-                      className={`flex-1 py-3 text-sm font-semibold transition-all ${
-                        payTab === 'card'
-                          ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Credit / Debit Card
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPayTab('upi')}
+                    className={`flex-1 py-3 text-sm font-semibold transition-all ${
+                      payTab === 'upi'
+                        ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    UPI / Google Pay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayTab('card')}
+                    className={`flex-1 py-3 text-sm font-semibold transition-all ${
+                      payTab === 'card'
+                        ? 'text-blue-600 border-b-2 border-blue-600 bg-white'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Credit / Debit Card
+                  </button>
                 </div>
 
-                <div className="p-5 space-y-5">
+                <div className="p-5">
 
                   {/* ── UPI Tab ── */}
-                  {payTab === 'upi' && (ADMIN_UPI || ADMIN_PHONE) && (
+                  {payTab === 'upi' && (
                     <div className="space-y-4">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 1 — Pay ₹299 via UPI</p>
-
                       <div className="flex gap-5 items-start">
-                        {/* QR code */}
                         {ADMIN_UPI && (
                           <div className="shrink-0 text-center">
                             <img
@@ -284,21 +277,14 @@ export default function Settings() {
                             <p className="text-[10px] text-gray-400 mt-1">Scan to pay ₹299</p>
                           </div>
                         )}
-
-                        {/* UPI details */}
                         <div className="flex-1 space-y-3 min-w-0">
                           {ADMIN_UPI && (
                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">UPI ID</p>
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-sm font-semibold text-gray-800 break-all flex-1">{ADMIN_UPI}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => copy(ADMIN_UPI, 'upi')}
-                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${
-                                    copied === 'upi' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'
-                                  }`}
-                                >
+                                <button type="button" onClick={() => copy(ADMIN_UPI, 'upi')}
+                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${copied === 'upi' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'}`}>
                                   {copied === 'upi' ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
                                 </button>
                               </div>
@@ -309,13 +295,8 @@ export default function Settings() {
                               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Google Pay / PhonePe / Paytm</p>
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-sm font-semibold text-gray-800 flex-1">{ADMIN_PHONE}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => copy(ADMIN_PHONE, 'phone')}
-                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${
-                                    copied === 'phone' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'
-                                  }`}
-                                >
+                                <button type="button" onClick={() => copy(ADMIN_PHONE, 'phone')}
+                                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-semibold transition-colors ${copied === 'phone' ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300'}`}>
                                   {copied === 'phone' ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
                                 </button>
                               </div>
@@ -327,41 +308,32 @@ export default function Settings() {
                   )}
 
                   {/* ── Card Tab ── */}
-                  {payTab === 'card' && RAZORPAY_LINK && (
+                  {payTab === 'card' && (
                     <div className="space-y-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 1 — Pay ₹299 via Card</p>
-                      <p className="text-sm text-gray-600">
-                        Click below to open our secure payment page. You can pay with any credit card, debit card, or net banking.
-                      </p>
-                      <a
-                        href={RAZORPAY_LINK}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
-                      >
-                        <CreditCard size={16} /> Pay ₹299 via Card / Net Banking
-                      </a>
-                      <p className="text-[10px] text-gray-400 text-center">Powered by Razorpay · 256-bit SSL · All major cards accepted</p>
+                      {RAZORPAY_LINK ? (
+                        <>
+                          <p className="text-sm text-gray-600">
+                            Pay securely with any credit card, debit card, or net banking. Powered by Razorpay.
+                          </p>
+                          <a
+                            href={RAZORPAY_LINK}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
+                          >
+                            <CreditCard size={16} /> Pay ₹299 via Card / Net Banking
+                          </a>
+                          <p className="text-[10px] text-gray-400 text-center">256-bit SSL · All major cards accepted · Instant activation</p>
+                        </>
+                      ) : (
+                        <div className="text-center py-6 space-y-2">
+                          <CreditCard size={32} className="mx-auto text-gray-300" />
+                          <p className="text-sm font-semibold text-gray-500">Card payment coming soon</p>
+                          <p className="text-xs text-gray-400">Use UPI / Google Pay to pay now, or contact ShopEase support to pay by card.</p>
+                        </div>
+                      )}
                     </div>
                   )}
-
-                  {/* ── After payment — always shown ── */}
-                  <div className="border-t border-gray-100 pt-4 space-y-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Step 2 — Confirm your payment</p>
-                    <p className="text-sm text-gray-600">Send a screenshot of your payment on WhatsApp. We'll activate your account within a few hours.</p>
-                    {ADMIN_PHONE ? (
-                      <a
-                        href={`https://wa.me/91${ADMIN_PHONE.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ShopEase! I've paid ₹299 for my subscription renewal.\nShop: ${shop?.shopName || ''}\nPhone: ${shop?.phone || ''}\n\n[Attach your payment screenshot]`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
-                      >
-                        <MessageCircle size={16} /> Send Screenshot on WhatsApp
-                      </a>
-                    ) : (
-                      <p className="text-xs text-gray-400">Contact ShopEase support with your payment confirmation.</p>
-                    )}
-                  </div>
 
                 </div>
               </div>
