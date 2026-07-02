@@ -639,6 +639,18 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('shopease:session-expired', handler);
   }, [logout]);
 
+  // Keep Render free-tier server warm — ping /health every 9 minutes so the
+  // server never goes to sleep (Render sleeps after 15 min of inactivity).
+  // This prevents the 30-60s cold-start delay when switching pages.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const ping = () => fetch(`${base}/health`).catch(() => {});
+    ping();
+    const id = setInterval(ping, 9 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isLoggedIn]);
+
   return (
     <AppContext.Provider value={{
       isLoggedIn, isLoading, login, loginAsShop, logout,

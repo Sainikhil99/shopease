@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle, Copy, MessageCircle } from 'lucide-react';
 
 const ADMIN_UPI   = import.meta.env.VITE_ADMIN_UPI_ID    || '';
 const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PAYMENT_PHONE || '';
@@ -206,6 +206,7 @@ export default function Settings() {
           <div className="space-y-4">
             {sub ? (
               <>
+                {/* Status banner */}
                 <div className={`rounded-xl p-4 border flex items-center gap-4 ${
                   sub.status === 'active' && sub.daysLeft > 7  ? 'bg-green-50 border-green-200' :
                   sub.status === 'active' && sub.daysLeft <= 7 ? 'bg-amber-50 border-amber-200' :
@@ -240,26 +241,94 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                  <p className="text-sm font-semibold text-gray-700">How to pay — ₹299/month</p>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    {ADMIN_PHONE && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">Google Pay / PhonePe</span>
-                        <span className="font-mono font-semibold text-gray-800">{ADMIN_PHONE}</span>
+                {/* Renew / Pay section */}
+                {(ADMIN_UPI || ADMIN_PHONE) && (
+                  <div className="border border-blue-100 rounded-xl overflow-hidden">
+                    <div className="bg-blue-600 px-4 py-2.5">
+                      <p className="text-white font-semibold text-sm">Renew your plan — ₹299 / month</p>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {/* Step 1 */}
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
+                        <div className="space-y-2 w-full">
+                          <p className="text-sm font-medium text-gray-700">Pay ₹299 via UPI</p>
+                          {/* QR + details side by side */}
+                          <div className="flex items-start gap-4">
+                            {ADMIN_UPI && (
+                              <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`upi://pay?pa=${ADMIN_UPI}&pn=ShopEase&am=299&cu=INR`)}`}
+                                alt="Pay ShopEase QR"
+                                className="w-24 h-24 rounded-lg border border-gray-200 shrink-0"
+                              />
+                            )}
+                            <div className="space-y-2 min-w-0">
+                              {ADMIN_UPI && (
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-0.5">UPI ID</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-sm font-semibold text-gray-800 break-all">{ADMIN_UPI}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigator.clipboard?.writeText(ADMIN_UPI)}
+                                      className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                                      title="Copy UPI ID"
+                                    >
+                                      <Copy size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {ADMIN_PHONE && (
+                                <div>
+                                  <p className="text-xs text-gray-400 mb-0.5">Google Pay / PhonePe / Paytm</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-sm font-semibold text-gray-800">{ADMIN_PHONE}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigator.clipboard?.writeText(ADMIN_PHONE)}
+                                      className="shrink-0 p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                                      title="Copy number"
+                                    >
+                                      <Copy size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    {ADMIN_UPI && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold">UPI ID</span>
-                        <span className="font-mono font-semibold text-gray-800">{ADMIN_UPI}</span>
+
+                      {/* Step 2 */}
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">2</span>
+                        <div className="w-full">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Send payment screenshot on WhatsApp</p>
+                          {ADMIN_PHONE && (
+                            <a
+                              href={`https://wa.me/91${ADMIN_PHONE.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ShopEase! I've paid ₹299 for my subscription renewal. Shop: ${shop?.shopName || ''} | Phone: ${shop?.phone || ''}\n[Please attach your payment screenshot]`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                            >
+                              <MessageCircle size={15} /> Send on WhatsApp
+                            </a>
+                          )}
+                          {!ADMIN_PHONE && (
+                            <p className="text-xs text-gray-400">Contact ShopEase support with your payment screenshot.</p>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <p className="text-xs text-gray-400 pt-1">
-                      After paying, send a screenshot to ShopEase support. Your account will be activated within a few hours.
-                    </p>
+
+                      {/* Step 3 */}
+                      <div className="flex gap-3">
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">3</span>
+                        <p className="text-sm text-gray-600">Your account will be activated within a few hours.</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-gray-400">Loading subscription info…</p>
