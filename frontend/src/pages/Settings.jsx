@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Save, Store, Mail, Bell, Shield, Check } from 'lucide-react';
+import { api } from '../utils/api';
+import { Save, Store, Mail, Bell, Shield, Check, CreditCard, IndianRupee, Clock, CheckCircle, XCircle } from 'lucide-react';
+
+const ADMIN_UPI   = import.meta.env.VITE_ADMIN_UPI_ID    || '';
+const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PAYMENT_PHONE || '';
 
 function Section({ title, icon: Icon, children }) {
   return (
@@ -18,11 +22,28 @@ function Section({ title, icon: Icon, children }) {
 
 export default function Settings() {
   const { shop, updateShop } = useApp();
-  const [form, setForm] = useState({ ...shop });
+  const [form, setForm]   = useState({ ...shop });
   const [saved, setSaved] = useState(false);
+  const [sub, setSub]     = useState(null);
 
   // Sync form when shop changes (e.g. after login/account switch)
   useEffect(() => { setForm({ ...shop }); }, [shop?.id]);
+
+  // Fetch full settings (includes subscription status + UPI fields not in JWT)
+  useEffect(() => {
+    api.get('/api/settings').then(data => {
+      setSub({
+        paidUntil: data.subscriptionPaidUntil,
+        status:    data.subscriptionStatus,
+        daysLeft:  parseInt(data.daysRemaining ?? 0),
+      });
+      setForm(prev => ({
+        ...prev,
+        upiId:        data.upiId        || '',
+        paymentPhone: data.paymentPhone || '',
+      }));
+    }).catch(() => {});
+  }, [shop?.id]);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -140,6 +161,101 @@ export default function Settings() {
               <span className="text-sm text-gray-500">units</span>
             </div>
             <p className="text-xs text-gray-400 mt-1">Products with stock below this number will show a red alert on the dashboard and in daily reports. Default: 5 units.</p>
+          </div>
+        </Section>
+
+        {/* Payment Details */}
+        <Section title="Payment Details" icon={CreditCard}>
+          <div className="space-y-4">
+            <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              These details appear on every bill so customers can pay you via UPI / Google Pay / PhonePe.
+            </p>
+            <Field
+              label="UPI ID"
+              name="upiId"
+              placeholder="yourshop@upi or yourshop@okicici"
+              sub="Customers scan QR or use this ID to pay you"
+            />
+            <Field
+              label="Payment Phone / Google Pay Number"
+              name="paymentPhone"
+              placeholder="9876543210"
+              sub="PhonePe / Google Pay / Paytm number linked to your bank"
+            />
+            {(form.upiId || form.paymentPhone) && (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 space-y-1">
+                <p className="font-semibold text-gray-700">Preview on bill receipt:</p>
+                {form.upiId && <p>UPI ID: <span className="font-mono text-blue-700">{form.upiId}</span></p>}
+                {form.paymentPhone && <p>Google Pay / PhonePe: <span className="font-mono text-blue-700">{form.paymentPhone}</span></p>}
+                <p className="text-gray-400 mt-1">A QR code will be auto-generated on the bill for easy scanning.</p>
+              </div>
+            )}
+          </div>
+        </Section>
+
+        {/* My Subscription */}
+        <Section title="My Subscription" icon={IndianRupee}>
+          <div className="space-y-4">
+            {sub ? (
+              <>
+                <div className={`rounded-xl p-4 border flex items-center gap-4 ${
+                  sub.status === 'active' && sub.daysLeft > 7  ? 'bg-green-50 border-green-200' :
+                  sub.status === 'active' && sub.daysLeft <= 7 ? 'bg-amber-50 border-amber-200' :
+                                                                  'bg-red-50 border-red-200'
+                }`}>
+                  <div className={`shrink-0 ${
+                    sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-500' :
+                    sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-500' :
+                                                                    'text-red-500'
+                  }`}>
+                    {sub.status === 'active' && sub.daysLeft > 7  ? <CheckCircle size={28} /> :
+                     sub.status === 'active' && sub.daysLeft <= 7 ? <Clock size={28} /> :
+                                                                     <XCircle size={28} />}
+                  </div>
+                  <div>
+                    <p className={`font-bold text-sm ${
+                      sub.status === 'active' && sub.daysLeft > 7  ? 'text-green-800' :
+                      sub.status === 'active' && sub.daysLeft <= 7 ? 'text-amber-800' :
+                                                                      'text-red-800'
+                    }`}>
+                      {sub.status === 'active'
+                        ? sub.daysLeft > 7
+                          ? `Active — ${sub.daysLeft} days remaining`
+                          : `Expiring soon — only ${sub.daysLeft} days left!`
+                        : 'Subscription Expired'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {sub.paidUntil
+                        ? `Valid until ${new Date(sub.paidUntil).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                        : 'No active subscription'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-semibold text-gray-700">How to pay — ₹299/month</p>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    {ADMIN_PHONE && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">Google Pay / PhonePe</span>
+                        <span className="font-mono font-semibold text-gray-800">{ADMIN_PHONE}</span>
+                      </div>
+                    )}
+                    {ADMIN_UPI && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold">UPI ID</span>
+                        <span className="font-mono font-semibold text-gray-800">{ADMIN_UPI}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400 pt-1">
+                      After paying, send a screenshot to ShopEase support. Your account will be activated within a few hours.
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400">Loading subscription info…</p>
+            )}
           </div>
         </Section>
 

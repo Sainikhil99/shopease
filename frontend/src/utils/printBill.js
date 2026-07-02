@@ -97,6 +97,18 @@ export function printBill(bill, shop) {
   </div>
 
   <hr class="divider">
+  ${(shop?.upiId || shop?.paymentPhone) ? `
+  <div style="text-align:center;margin:8px 0">
+    <p style="font-size:10px;font-weight:bold;color:#555;margin-bottom:4px">PAY VIA UPI</p>
+    ${shop.upiId ? `<img
+      src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`upi://pay?pa=${shop.upiId}&pn=${encodeURIComponent(shop.shopName || 'Shop')}&am=${total}&cu=INR`)}"
+      alt="UPI QR" style="width:110px;height:110px;display:block;margin:0 auto 4px"
+    />
+    <p style="font-size:9px;color:#666">Scan to pay ₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+    <p style="font-size:10px;font-weight:bold;color:#333;margin-top:2px">${shop.upiId}</p>` : ''}
+    ${shop.paymentPhone ? `<p style="font-size:10px;color:#555;margin-top:3px">GPay / PhonePe: <b>${shop.paymentPhone}</b></p>` : ''}
+  </div>
+  <hr class="divider">` : ''}
   <div class="footer">
     <p>Thank you! Visit again.</p>
     <p style="margin-top:4px">Powered by ShopEase</p>

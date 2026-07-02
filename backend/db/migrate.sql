@@ -164,3 +164,7 @@ CREATE TRIGGER products_updated_at
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS subscription_paid_until DATE DEFAULT (CURRENT_DATE + INTERVAL '30 days');
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS monthly_charge INTEGER DEFAULT 299;
 UPDATE shops SET subscription_paid_until = CURRENT_DATE + INTERVAL '30 days' WHERE subscription_paid_until IS NULL;
+
+-- ── 11. Shop payment details (UPI / Google Pay shown on customer bills) ───────
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS upi_id       VARCHAR(100);
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS payment_phone VARCHAR(20);
