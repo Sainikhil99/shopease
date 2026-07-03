@@ -586,6 +586,26 @@ export function AppProvider({ children }) {
     setStockLedger(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
   };
 
+  const adjustEntryQty = (entryId, productId, newQty, oldQty) => {
+    const delta = newQty - oldQty;
+    if (delta === 0) return;
+    setStockLedger(prev => {
+      const sorted = prev.filter(e => e.productId === productId).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const fromIdx = sorted.findIndex(e => e.id === entryId);
+      const affectedIds = new Set(sorted.slice(fromIdx).map(e => e.id));
+      return prev.map(e => {
+        if (!affectedIds.has(e.id)) return e;
+        return { ...e, qty: e.id === entryId ? newQty : e.qty, balanceAfter: e.balanceAfter + delta };
+      });
+    });
+    setProducts(prev => prev.map(p => {
+      if (p.id !== productId) return p;
+      const updated = Math.max(0, p.stockQty + delta);
+      bgApi.put(`/api/products/${p.id}`, { stockQty: updated }).catch(() => {});
+      return { ...p, stockQty: updated };
+    }));
+  };
+
   // ── Bills ──────────────────────────────────────────────────────────────────
   const addBill = (bill) => {
     // Guard against double-tap / double-click submitting the same bill twice
@@ -840,7 +860,7 @@ export function AppProvider({ children }) {
       products, addProduct, updateProduct, deleteProduct,
       bills, addBill,
       returns, addReturn,
-      stockLedger, addStockPurchase, updateStockEntry,
+      stockLedger, addStockPurchase, updateStockEntry, adjustEntryQty,
       coupons, addCoupon, updateCoupon, deleteCoupon, validateCoupon,
       expenses, addExpense, deleteExpense,
       todaysBills, todaysSales, todaysProfit, lowStockProducts,

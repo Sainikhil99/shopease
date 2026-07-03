@@ -663,7 +663,7 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct, recentBatch
 
 // ── Main Inventory Page ───────────────────────────────────────────────────────
 export default function Inventory() {
-  const { products, stockLedger, addStockPurchase, updateStockEntry, addProduct, shop } = useApp();
+  const { products, stockLedger, addStockPurchase, updateStockEntry, adjustEntryQty, addProduct, shop } = useApp();
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [period, setPeriod]             = useState('month');
@@ -731,7 +731,7 @@ export default function Inventory() {
       invoiceNo: entry.invoiceNo || '',
       items: batchEntries.map(e => {
         const p = products.find(x => x.id === e.productId);
-        return { entryId: e.id, productId: e.productId, productName: p?.name || '—', qty: e.qty, costPrice: String(e.costPrice || ''), note: e.note || '' };
+        return { entryId: e.id, productId: e.productId, productName: p?.name || '—', qty: String(e.qty), origQty: e.qty, costPrice: String(e.costPrice || ''), note: e.note || '' };
       }),
       newItems: [],
     });
@@ -754,9 +754,74 @@ export default function Inventory() {
   const removeNewEditItem = (idx) =>
     setEditForm(f => ({ ...f, newItems: f.newItems.filter((_, i) => i !== idx) }));
 
+  const printEditBatchPDF = (form, entryDate, shopInfo) => {
+    const allItems = [
+      ...(form.items || []).map(it => ({ productName: it.productName, qty: Math.max(1, parseInt(it.qty) || it.origQty || 1), costPrice: parseFloat(it.costPrice) || 0, note: it.note || '' })),
+      ...(form.newItems || []).filter(it => parseInt(it.qty) > 0).map(it => ({ productName: it.productName, qty: parseInt(it.qty), costPrice: parseFloat(it.costPrice) || 0, note: it.note || '' })),
+    ];
+    if (allItems.length === 0) return;
+    const dateStr = fmtDateTime(entryDate);
+    const totalQty  = allItems.reduce((s, i) => s + i.qty, 0);
+    const totalCost = allItems.reduce((s, i) => s + i.qty * i.costPrice, 0);
+    const rows = allItems.map(i => `
+      <tr>
+        <td>${i.productName}</td>
+        <td style="text-align:center;color:#16a34a;font-weight:bold">+${i.qty}</td>
+        <td style="text-align:center">${i.costPrice ? '₹' + i.costPrice.toLocaleString('en-IN') : '—'}</td>
+        <td style="text-align:center">${i.costPrice ? '₹' + (i.qty * i.costPrice).toLocaleString('en-IN') : '—'}</td>
+        <td>${form.invoiceNo || '—'}</td>
+        <td>${i.note || '—'}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Stock Receipt — ${form.supplierName || 'Supplier'}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:24px;max-width:800px;margin:auto}
+      .print-btn{display:block;margin:0 0 16px auto;padding:10px 28px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
+      .shop-header{text-align:center;border-bottom:3px solid #d97706;padding-bottom:12px;margin-bottom:20px}
+      .shop-header h1{font-size:22px;color:#b45309;font-weight:800}
+      .meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+      .meta-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px}
+      .meta-label{font-size:9px;color:#92400e;text-transform:uppercase;letter-spacing:.5px}
+      .meta-value{font-size:13px;font-weight:bold;color:#111;margin-top:3px}
+      .badge{text-align:center;background:#fffbeb;border:2px solid #fcd34d;border-radius:8px;padding:10px;font-size:16px;font-weight:800;color:#92400e;margin-bottom:16px;letter-spacing:1px}
+      table{width:100%;border-collapse:collapse}
+      thead th{background:#d97706;color:#fff;padding:8px 6px;text-align:left;font-size:10px;text-transform:uppercase}
+      tbody td{padding:7px 6px;border-bottom:1px solid #fef3c7;font-size:11px}
+      tbody tr:nth-child(even) td{background:#fffbeb}
+      .total-row td{border-top:2px solid #d97706;background:#fef3c7!important;font-weight:bold;color:#92400e}
+      .footer{text-align:center;margin-top:24px;padding-top:12px;border-top:1px solid #fcd34d;color:#92400e;font-size:10px}
+      @media print{.print-btn{display:none}}
+    </style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <div class="shop-header"><h1>${shopInfo?.shopName || ''}</h1>
+      <p style="color:#92400e;margin-top:3px">${shopInfo?.address || ''} ${shopInfo?.phone ? '· ' + shopInfo.phone : ''}</p></div>
+    <div class="badge">📦 STOCK-IN RECEIPT — CLIENT: ${(form.supplierName || 'Supplier').toUpperCase()}</div>
+    <div class="meta-grid">
+      <div class="meta-box"><div class="meta-label">Date</div><div class="meta-value">${dateStr}</div></div>
+      <div class="meta-box"><div class="meta-label">Client / Supplier</div><div class="meta-value" style="color:#b45309">${form.supplierName || '—'}</div></div>
+      <div class="meta-box"><div class="meta-label">Total</div><div class="meta-value">${allItems.length} product${allItems.length !== 1 ? 's' : ''} · ${totalQty} pcs · ₹${totalCost.toLocaleString('en-IN')}</div></div>
+    </div>
+    <table><thead><tr><th>Product</th><th>Qty Added</th><th>Cost/Pc</th><th>Total Cost</th><th>Invoice</th><th>Note</th></tr></thead>
+    <tbody>${rows}
+      <tr class="total-row"><td style="text-align:right;padding-right:12px">TOTAL</td>
+        <td style="text-align:center">+${totalQty}</td><td></td>
+        <td style="text-align:center">₹${totalCost.toLocaleString('en-IN')}</td><td></td><td></td></tr>
+    </tbody></table>
+    <div class="footer"><p>Generated by ShopEase · ${dateStr}</p></div>
+    </body></html>`;
+    const win = window.open('', '_blank', 'width=900,height=680');
+    win.document.write(html);
+    win.document.close();
+  };
+
   const saveEditBatch = () => {
     if (!editingEntry) return;
+    const entryDate = editingEntry.date;
     (editForm.items || []).forEach(item => {
+      const newQty = Math.max(1, parseInt(item.qty) || item.origQty);
+      if (newQty !== item.origQty) {
+        adjustEntryQty(item.entryId, item.productId, newQty, item.origQty);
+      }
       updateStockEntry(item.entryId, {
         supplierName: editForm.supplierName.trim(),
         invoiceNo: editForm.invoiceNo.trim(),
@@ -765,14 +830,16 @@ export default function Inventory() {
       });
     });
     (editForm.newItems || []).forEach(item => {
-      if (parseInt(item.qty) > 0) {
+      const qty = parseInt(item.qty) || 0;
+      if (qty > 0) {
         addStockPurchase(
-          item.productId, parseInt(item.qty),
+          item.productId, qty,
           editForm.supplierName.trim(), item.note.trim(),
           parseFloat(item.costPrice) || 0, editForm.invoiceNo.trim()
         );
       }
     });
+    printEditBatchPDF(editForm, entryDate, shop);
     setEditingEntry(null);
   };
 
@@ -1050,7 +1117,7 @@ export default function Inventory() {
                                   {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
                                 </span>
                                 <span className="text-gray-500">bal: <span className="font-bold text-gray-700">{e.balanceAfter}</span></span>
-                                {e.supplierName && <span className="text-gray-500">· {e.supplierName}</span>}
+                                {e.supplierName && <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">{e.supplierName}</span>}
                                 {e.billNumber && <span className="text-blue-500">· {e.billNumber}</span>}
                                 {e.note && <span className="text-gray-400">— {e.note}</span>}
                               </div>
@@ -1106,7 +1173,11 @@ export default function Inventory() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-800 text-sm">{product?.name || '—'}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{e.type}</span>
-                      {e.supplierName && <span className="text-xs text-gray-500">· {e.supplierName}</span>}
+                      {e.supplierName && (
+                        <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                          {e.supplierName}
+                        </span>
+                      )}
                       {e.billNumber && e.billNumber !== 'Multiple' && <span className="text-xs text-blue-500">· {e.billNumber}</span>}
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
@@ -1199,11 +1270,15 @@ export default function Inventory() {
                   <div className="space-y-2">
                     {(editForm.items || []).map((item, idx) => (
                       <div key={item.entryId} className="bg-gray-50 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-semibold text-sm text-gray-800">{item.productName}</p>
-                          <span className="text-xs text-green-700 font-bold bg-green-100 px-2 py-0.5 rounded-full">+{item.qty} pcs (locked)</span>
-                        </div>
+                        <p className="font-semibold text-sm text-gray-800 mb-2">{item.productName}</p>
                         <div className="flex gap-2">
+                          <div className="w-20">
+                            <label className="text-xs text-gray-500 mb-0.5 block">Qty</label>
+                            <input type="number" min="1" className="input-field text-sm py-1.5 font-bold"
+                              value={item.qty}
+                              onChange={e => updateEditItem(idx, 'qty', e.target.value)}
+                              placeholder="1" />
+                          </div>
                           <div className="flex-1">
                             <label className="text-xs text-gray-500 mb-0.5 block">Cost/Pc (₹)</label>
                             <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5"
