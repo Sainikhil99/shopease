@@ -1,10 +1,14 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import {
   Plus, Package, TrendingUp, TrendingDown, IndianRupee,
   X, Check, Search, ArrowRight, Printer, FileText,
-  CalendarDays, ChevronDown, AlertTriangle, Boxes
+  CalendarDays, ChevronDown, AlertTriangle, Boxes, Sparkles
 } from 'lucide-react';
+
+const CATEGORIES = ['clothing', 'footwear', 'accessories', 'electronics', 'groceries', 'other'];
+const GST_RATES  = [0, 5, 12, 18, 28];
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 const periodRange = (period, custom) => {
@@ -223,12 +227,17 @@ function printInventoryReport(products, stockLedger, range, periodLabel, shop) {
 }
 
 // ── Add Stock Modal ───────────────────────────────────────────────────────────
-function AddStockModal({ products, onSave, onClose }) {
+const EMPTY_NEW = { name: '', category: 'clothing', mrp: '', sellingPrice: '', costPrice: '', gstRate: '0', minStockAlert: '5' };
+
+function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
   const [batch, setBatch]         = useState([]);
   const [search, setSearch]       = useState('');
   const [supplier, setSupplier]   = useState('');
   const [invoice, setInvoice]     = useState('');
   const [showDrop, setShowDrop]   = useState(false);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newProd, setNewProd]     = useState(EMPTY_NEW);
+  const [creating, setCreating]   = useState(false);
 
   const filtered = products.filter(p =>
     p.isActive && (
@@ -237,6 +246,7 @@ function AddStockModal({ products, onSave, onClose }) {
       p.barcode?.includes(search)
     )
   );
+  const noMatch = search.trim().length > 0 && filtered.length === 0;
 
   const addToBatch = (product) => {
     if (batch.find(b => b.product.id === product.id)) return;
@@ -244,6 +254,31 @@ function AddStockModal({ products, onSave, onClose }) {
       product, qtyAdded: '', costPrice: String(product.costPrice || ''), note: '',
     }]);
     setSearch(''); setShowDrop(false);
+  };
+
+  const handleCreateProduct = () => {
+    if (!newProd.name.trim() || !newProd.mrp || !newProd.sellingPrice) return;
+    setCreating(true);
+    const created = onCreateProduct({
+      name:          newProd.name.trim(),
+      category:      newProd.category,
+      mrp:           parseFloat(newProd.mrp),
+      sellingPrice:  parseFloat(newProd.sellingPrice),
+      costPrice:     parseFloat(newProd.costPrice) || 0,
+      gstRate:       parseFloat(newProd.gstRate) || 0,
+      minStockAlert: parseInt(newProd.minStockAlert) || 5,
+      stockQty:      0,
+      barcode:       '',
+    });
+    // Add the freshly-created product to the batch
+    setBatch(prev => [...prev, {
+      product: created, qtyAdded: '', costPrice: String(created.costPrice || ''), note: '',
+    }]);
+    setNewProd(EMPTY_NEW);
+    setSearch('');
+    setShowDrop(false);
+    setShowNewForm(false);
+    setCreating(false);
   };
 
   const updateItem = (idx, key, val) => {
@@ -277,7 +312,7 @@ function AddStockModal({ products, onSave, onClose }) {
         <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-gray-800">Add Stock</h3>
-            <p className="text-sm text-gray-400 mt-0.5">Select products received today and enter quantities</p>
+            <p className="text-sm text-gray-400 mt-0.5">Search existing products or create a new one</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
@@ -304,37 +339,126 @@ function AddStockModal({ products, onSave, onClose }) {
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" value={search}
-                onChange={e => { setSearch(e.target.value); setShowDrop(true); }}
+                onChange={e => { setSearch(e.target.value); setShowDrop(true); setShowNewForm(false); }}
                 onFocus={() => setShowDrop(true)}
-                placeholder="Search product name or barcode to add…"
+                placeholder="Search product name or barcode…"
                 className="input-field pl-9 text-sm" />
-              {search && <button onClick={() => { setSearch(''); setShowDrop(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>}
+              {search && <button onClick={() => { setSearch(''); setShowDrop(false); setShowNewForm(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>}
             </div>
+
             {showDrop && (
-              <div className="border border-gray-200 rounded-xl mt-1 overflow-hidden shadow-md max-h-44 overflow-y-auto">
-                {filtered.length === 0
-                  ? <p className="text-sm text-gray-400 px-4 py-3">No products found</p>
-                  : filtered.map(p => {
-                    const already = batch.find(b => b.product.id === p.id);
-                    return (
-                      <button key={p.id} type="button"
-                        onClick={() => already ? null : addToBatch(p)}
-                        disabled={!!already}
-                        className={`w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 last:border-0 text-left transition-colors ${already ? 'bg-green-50 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">{p.name}</p>
-                          <p className="text-xs text-gray-400 capitalize">{p.category} · Stock: {p.stockQty}</p>
-                        </div>
-                        <span className={`text-xs font-bold ${already ? 'text-green-600' : 'text-blue-600'}`}>
-                          {already ? '✓ Added' : '+ Add'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                <button type="button" onClick={() => setShowDrop(false)}
-                  className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 bg-gray-50">
-                  Close
+              <div className="border border-gray-200 rounded-xl mt-1 overflow-hidden shadow-md">
+                <div className="max-h-44 overflow-y-auto">
+                  {filtered.length > 0
+                    ? filtered.map(p => {
+                        const already = batch.find(b => b.product.id === p.id);
+                        return (
+                          <button key={p.id} type="button"
+                            onClick={() => already ? null : addToBatch(p)}
+                            disabled={!!already}
+                            className={`w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 last:border-0 text-left transition-colors ${already ? 'bg-green-50 opacity-60 cursor-not-allowed' : 'hover:bg-blue-50'}`}>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+                              <p className="text-xs text-gray-400 capitalize">{p.category} · Stock: {p.stockQty}</p>
+                            </div>
+                            <span className={`text-xs font-bold ${already ? 'text-green-600' : 'text-blue-600'}`}>
+                              {already ? '✓ Added' : '+ Add'}
+                            </span>
+                          </button>
+                        );
+                      })
+                    : search.trim()
+                      ? <p className="text-sm text-gray-400 px-4 py-3">No products found for "{search}"</p>
+                      : null
+                  }
+                </div>
+                {/* Create new product option */}
+                {noMatch && (
+                  <button type="button"
+                    onClick={() => { setNewProd(n => ({ ...n, name: search.trim() })); setShowNewForm(true); setShowDrop(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 font-semibold text-sm hover:bg-blue-100 transition-colors border-t border-blue-100">
+                    <Sparkles size={15} />
+                    Create new product "{search.trim()}"
+                  </button>
+                )}
+                {!noMatch && (
+                  <button type="button" onClick={() => setShowDrop(false)}
+                    className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100 bg-gray-50">
+                    Close
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Inline new product form */}
+            {showNewForm && (
+              <div className="mt-3 border-2 border-blue-200 bg-blue-50 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-blue-600" />
+                    <span className="text-sm font-bold text-blue-800">Create New Product</span>
+                  </div>
+                  <button type="button" onClick={() => setShowNewForm(false)} className="text-gray-400 hover:text-gray-600">
+                    <X size={15} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Product Name *</label>
+                    <input type="text" value={newProd.name}
+                      onChange={e => setNewProd(n => ({ ...n, name: e.target.value }))}
+                      className="input-field text-sm" placeholder="e.g. Blue Cotton Shirt (L)" autoFocus />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+                    <select value={newProd.category}
+                      onChange={e => setNewProd(n => ({ ...n, category: e.target.value }))}
+                      className="input-field text-sm capitalize">
+                      {CATEGORIES.map(c => <option key={c} value={c} className="capitalize">{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">GST Rate (%)</label>
+                    <select value={newProd.gstRate}
+                      onChange={e => setNewProd(n => ({ ...n, gstRate: e.target.value }))}
+                      className="input-field text-sm">
+                      {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">MRP (₹) *</label>
+                    <input type="number" min="0" value={newProd.mrp}
+                      onChange={e => setNewProd(n => ({ ...n, mrp: e.target.value, sellingPrice: e.target.value }))}
+                      className="input-field text-sm" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Selling Price (₹) *</label>
+                    <input type="number" min="0" value={newProd.sellingPrice}
+                      onChange={e => setNewProd(n => ({ ...n, sellingPrice: e.target.value }))}
+                      className="input-field text-sm" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Cost Price (₹)</label>
+                    <input type="number" min="0" value={newProd.costPrice}
+                      onChange={e => setNewProd(n => ({ ...n, costPrice: e.target.value }))}
+                      className="input-field text-sm" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Min Stock Alert</label>
+                    <input type="number" min="0" value={newProd.minStockAlert}
+                      onChange={e => setNewProd(n => ({ ...n, minStockAlert: e.target.value }))}
+                      className="input-field text-sm" placeholder="5" />
+                  </div>
+                </div>
+
+                <button type="button" onClick={handleCreateProduct}
+                  disabled={creating || !newProd.name.trim() || !newProd.mrp || !newProd.sellingPrice}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+                  <Check size={15} />
+                  {creating ? 'Creating…' : 'Create Product & Add to Stock List'}
                 </button>
+                <p className="text-xs text-blue-500 text-center">Product will also appear in Products page after saving</p>
               </div>
             )}
           </div>
@@ -434,7 +558,8 @@ function AddStockModal({ products, onSave, onClose }) {
 
 // ── Main Inventory Page ───────────────────────────────────────────────────────
 export default function Inventory() {
-  const { products, stockLedger, addStockPurchase, shop } = useApp();
+  const { products, stockLedger, addStockPurchase, addProduct, shop } = useApp();
+  const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [period, setPeriod]             = useState('month');
   const [custom, setCustom]             = useState({ from: '', to: '' });
@@ -475,6 +600,11 @@ export default function Inventory() {
     [stockLedger, range, ownProductIds]
   );
 
+  const handleCreateProduct = (productData) => {
+    const newProduct = addProduct(productData);
+    return newProduct;
+  };
+
   const handleAddStock = (batch) => {
     batch.forEach(item => {
       addStockPurchase(
@@ -485,6 +615,8 @@ export default function Inventory() {
     });
     setShowAddModal(false);
     printStockInSlip(batch, products, shop);
+    // Redirect to Products page so owner can see newly created products
+    navigate('/products');
   };
 
   const PERIODS = [
@@ -736,6 +868,7 @@ export default function Inventory() {
           products={products}
           onSave={handleAddStock}
           onClose={() => setShowAddModal(false)}
+          onCreateProduct={handleCreateProduct}
         />
       )}
     </div>

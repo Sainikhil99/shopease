@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Search, RotateCcw, Check, X, ChevronLeft, Package, AlertTriangle } from 'lucide-react';
 
@@ -9,8 +10,16 @@ const REASONS = ['Customer not satisfied', 'Wrong size / colour', 'Defective / d
 
 export default function Returns() {
   const { bills, returns, addReturn } = useApp();
+  const location = useLocation();
 
   const [query, setQuery]               = useState('');
+
+  // Auto-fill search when navigated from SalesHistory "Return" button
+  useEffect(() => {
+    if (location.state?.billNumber) {
+      setQuery(location.state.billNumber);
+    }
+  }, [location.state?.billNumber]);
   const [selectedBill, setSelectedBill] = useState(null);
   const [returnItems, setReturnItems]   = useState({});   // key = productName
   const [reason, setReason]             = useState('');

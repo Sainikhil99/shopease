@@ -122,6 +122,19 @@ CREATE TABLE IF NOT EXISTS stock_purchases (
   purchased_at   TIMESTAMP DEFAULT NOW()
 );
 
+-- ─── expenses ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS expenses (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  shop_id      UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  category     VARCHAR(50) NOT NULL DEFAULT 'other'
+                 CHECK (category IN ('rent','electricity','staff','purchase','transport','other')),
+  amount       DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+  note         TEXT,
+  expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at   TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_shop_date ON expenses(shop_id, expense_date DESC);
+
 -- ─── email_logs ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS email_logs (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

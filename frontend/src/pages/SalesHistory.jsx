@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useDebounce } from '../hooks/useDebounce';
-import { Search, X, Eye, Printer, Download, Filter } from 'lucide-react';
-import { printBill } from '../utils/printBill';
+import { Search, X, Eye, Printer, Receipt, Download, Filter, RotateCcw, User } from 'lucide-react';
+import { printBill, printThermal } from '../utils/printBill';
 
 const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
 const PAYMENT_COLORS = {
@@ -15,6 +16,7 @@ const PAYMENT_COLORS = {
 
 function BillDetailModal({ bill, onClose }) {
   const { shop } = useApp();
+  const navigate  = useNavigate();
   if (!bill) return null;
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
@@ -62,12 +64,94 @@ function BillDetailModal({ bill, onClose }) {
             <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-2"><span>Total Paid</span><span>₹{bill.total.toLocaleString('en-IN')}</span></div>
           </div>
 
-          <div className="flex gap-3 mt-5">
-            <button onClick={() => printBill(bill, shop)} className="btn-secondary flex-1 flex items-center justify-center gap-2">
-              <Printer size={16} /> Print / PDF
+          <div className="flex gap-2 mt-5 flex-wrap">
+            <button onClick={() => printBill(bill, shop)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm min-w-[90px]">
+              <Printer size={14} /> A4 / PDF
             </button>
-            <button onClick={onClose} className="btn-primary flex-1">Close</button>
+            <button onClick={() => printThermal(bill, shop)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm min-w-[90px]">
+              <Receipt size={14} /> Thermal
+            </button>
+            {bill.status !== 'refunded' && (
+              <button
+                onClick={() => { onClose(); navigate('/returns', { state: { billNumber: bill.billNumber } }); }}
+                className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm min-w-[90px] text-orange-600 border-orange-200 hover:bg-orange-50"
+              >
+                <RotateCcw size={14} /> Return
+              </button>
+            )}
+            <button onClick={onClose} className="btn-primary flex-1 min-w-[80px]">Close</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomerHistoryModal({ customerName, bills, shop, onClose }) {
+  const customerBills = useMemo(
+    () => bills.filter(b => b.customerName === customerName).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [bills, customerName]
+  );
+  const totalSpent = customerBills.reduce((s, b) => s + b.total, 0);
+  const navigate   = useNavigate();
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <User size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-800">{customerName}</h3>
+              <p className="text-xs text-gray-500">
+                {customerBills.length} bill{customerBills.length !== 1 ? 's' : ''} · ₹{Math.round(totalSpent).toLocaleString('en-IN')} total spent
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-3">
+          {customerBills.map(bill => (
+            <div key={bill.id} className="p-4 border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <div className="text-sm font-semibold text-blue-700">{bill.billNumber}</div>
+                  <div className="text-xs text-gray-400">
+                    {new Date(bill.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-gray-900">₹{bill.total.toLocaleString('en-IN')}</div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PAYMENT_COLORS[bill.paymentMode] || 'bg-gray-100 text-gray-700'}`}>
+                    {PAYMENT_LABELS[bill.paymentMode] || bill.paymentMode}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 mb-3">
+                {bill.items.length} item{bill.items.length !== 1 ? 's' : ''}
+                {bill.discountAmount > 0 && ` · Discount ₹${bill.discountAmount.toLocaleString('en-IN')}`}
+                {bill.status === 'refunded' && <span className="ml-2 text-orange-600 font-medium">· Refunded</span>}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => printBill(bill, shop)} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded bg-gray-50 hover:bg-gray-100">
+                  <Printer size={11} /> A4
+                </button>
+                <button onClick={() => printThermal(bill, shop)} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 px-2 py-1 rounded bg-gray-50 hover:bg-gray-100">
+                  <Receipt size={11} /> Thermal
+                </button>
+                {bill.status !== 'refunded' && (
+                  <button
+                    onClick={() => { onClose(); navigate('/returns', { state: { billNumber: bill.billNumber } }); }}
+                    className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1 px-2 py-1 rounded bg-orange-50 hover:bg-orange-100"
+                  >
+                    <RotateCcw size={11} /> Return
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -80,6 +164,7 @@ export default function SalesHistory() {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all'); // all | today | week | month
   const [selectedBill, setSelectedBill] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   const debouncedQuery = useDebounce(query, 200);
 
@@ -196,7 +281,13 @@ export default function SalesHistory() {
                     <div className="text-xs">{new Date(bill.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-800">{bill.customerName}</div>
+                    <button
+                      onClick={() => setSelectedCustomer(bill.customerName)}
+                      className="font-medium text-gray-800 hover:text-blue-600 text-left transition-colors"
+                      title="View customer history"
+                    >
+                      {bill.customerName}
+                    </button>
                     {bill.customerPhone && <div className="text-xs text-gray-400">+91 {bill.customerPhone}</div>}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{bill.items.length} items</td>
@@ -210,11 +301,14 @@ export default function SalesHistory() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => setSelectedBill(bill)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="View">
+                      <button onClick={() => setSelectedBill(bill)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="View details">
                         <Eye size={15} />
                       </button>
-                      <button onClick={() => printBill(bill, shop)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg" title="Print / PDF">
+                      <button onClick={() => printBill(bill, shop)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg" title="Print A4 / PDF">
                         <Printer size={15} />
+                      </button>
+                      <button onClick={() => printThermal(bill, shop)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg" title="Print Thermal Slip (58mm)">
+                        <Receipt size={14} />
                       </button>
                     </div>
                   </td>
@@ -232,6 +326,14 @@ export default function SalesHistory() {
       </div>
 
       {selectedBill && <BillDetailModal bill={selectedBill} onClose={() => setSelectedBill(null)} />}
+      {selectedCustomer && (
+        <CustomerHistoryModal
+          customerName={selectedCustomer}
+          bills={bills}
+          shop={shop}
+          onClose={() => setSelectedCustomer(null)}
+        />
+      )}
     </div>
   );
 }

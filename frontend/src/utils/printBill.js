@@ -127,3 +127,116 @@ export function printBill(bill, shop) {
   popup.document.write(html);
   popup.document.close();
 }
+
+// 58mm thermal receipt — compact monospace layout for counter printers
+export function printThermal(bill, shop) {
+  const date = new Date(bill.createdAt || Date.now()).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  const PAYMENT_LABELS = {
+    cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe',
+    googlepay: 'Google Pay', card: 'Card',
+  };
+  const payLabel = PAYMENT_LABELS[bill.paymentMode] || bill.paymentMode?.toUpperCase() || '—';
+
+  const subtotal = parseFloat(bill.subtotal ?? 0);
+  const discount = parseFloat(bill.discountAmount ?? 0);
+  const tax      = parseFloat(bill.taxAmount ?? 0);
+  const total    = parseFloat(bill.total ?? 0);
+
+  const itemLines = (bill.items || []).map(item => {
+    const name   = item.productName || item.name || '—';
+    const qty    = item.qty ?? item.quantity ?? 1;
+    const price  = parseFloat(item.sellingPrice ?? item.price ?? 0);
+    const itotal = parseFloat(item.itemTotal ?? (price * qty));
+    const gst    = parseFloat(item.gstRate ?? 0);
+    return `
+      <div class="iname">${name}${gst > 0 ? `<span class="gst"> [${gst}%]</span>` : ''}</div>
+      <div class="icalc"><span>${qty} &times; &#8377;${price.toFixed(2)}</span><span class="ibold">&#8377;${itotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>`;
+  }).join('<div class="igap"></div>');
+
+  const upiQr = shop?.upiId
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`upi://pay?pa=${shop.upiId}&pn=${encodeURIComponent(shop.shopName || 'Shop')}&am=${total}&cu=INR`)}`
+    : null;
+
+  const shopMeta = [
+    shop?.address,
+    shop?.gstin ? 'GSTIN: ' + shop.gstin : '',
+    shop?.phone  ? 'Ph: ' + shop.phone  : '',
+  ].filter(Boolean).join('<br>');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Slip ${bill.billNumber || ''}</title>
+<style>
+  @page { size: 58mm auto; margin: 2mm 1mm; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;font-size:10px;color:#000;background:#fff;width:56mm}
+  .sname{font-size:13px;font-weight:bold;text-align:center;margin-bottom:2px}
+  .ssub{font-size:8.5px;text-align:center;line-height:1.5;color:#222}
+  .dashed{border-top:1px dashed #000;margin:4px 0}
+  .solid{border-top:1px solid #000;margin:4px 0}
+  .mrow{display:flex;justify-content:space-between;font-size:9.5px;margin:1.5px 0}
+  .iname{font-size:10px;font-weight:bold;margin-top:4px;word-break:break-word}
+  .gst{font-size:8px;font-weight:normal;color:#555}
+  .icalc{display:flex;justify-content:space-between;font-size:9px;padding-left:5px;margin-bottom:1px}
+  .ibold{font-weight:bold}
+  .igap{height:3px}
+  .trow{display:flex;justify-content:space-between;font-size:9.5px;margin:2px 0}
+  .grand{display:flex;justify-content:space-between;font-size:13px;font-weight:bold;margin:3px 0}
+  .footer{text-align:center;font-size:9px;margin-top:6px;line-height:1.7;color:#222}
+  .pbtn{display:block;margin:10px auto 4px;padding:5px 18px;background:#111;color:#fff;border:none;cursor:pointer;font-size:11px;font-family:sans-serif;border-radius:3px}
+  @media print{.pbtn{display:none}}
+</style>
+</head>
+<body>
+  <div class="sname">${shop?.shopName || 'ShopEase'}</div>
+  ${shopMeta ? `<div class="ssub">${shopMeta}</div>` : ''}
+
+  <div class="dashed"></div>
+  <div class="mrow"><span>Bill#</span><span>${bill.billNumber || '—'}</span></div>
+  <div class="mrow"><span>Date</span><span>${date}</span></div>
+  <div class="mrow"><span>Customer</span><span>${(bill.customerName || '—').substring(0, 14)}</span></div>
+  ${bill.customerPhone ? `<div class="mrow"><span>Phone</span><span>+91 ${bill.customerPhone}</span></div>` : ''}
+
+  <div class="dashed"></div>
+  ${itemLines}
+
+  <div class="solid"></div>
+  <div class="trow"><span>Subtotal</span><span>&#8377;${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+  ${discount > 0 ? `<div class="trow"><span>Discount</span><span>-&#8377;${discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : ''}
+  ${tax > 0 ? `<div class="trow"><span>GST</span><span>+&#8377;${tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : ''}
+  <div class="solid"></div>
+  <div class="grand"><span>TOTAL</span><span>&#8377;${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+  <div class="trow"><span>Payment</span><span>${payLabel}</span></div>
+  ${bill.couponCode ? `<div class="trow"><span>Coupon</span><span>${bill.couponCode}</span></div>` : ''}
+
+  ${upiQr || shop?.paymentPhone ? `
+  <div class="dashed"></div>
+  <div style="text-align:center;font-size:9px;font-weight:bold;margin-bottom:3px">PAY VIA UPI</div>
+  ${upiQr ? `
+    <img src="${upiQr}" style="width:24mm;height:24mm;display:block;margin:2px auto" alt="UPI QR">
+    <div style="text-align:center;font-size:8.5px;margin-top:2px">${shop.upiId}</div>` : ''}
+  ${shop?.paymentPhone ? `<div style="text-align:center;font-size:8.5px;margin-top:2px">GPay/PhonePe: ${shop.paymentPhone}</div>` : ''}
+  ` : ''}
+
+  <div class="dashed"></div>
+  <div class="footer">Thank you! Visit again.<br>Powered by ShopEase</div>
+
+  <button class="pbtn" onclick="window.print()">Print</button>
+  <script>setTimeout(()=>window.print(),300)</script>
+</body>
+</html>`;
+
+  const popup = window.open('', '_blank', 'width=280,height=500');
+  if (!popup) {
+    alert('Please allow popups for this site to print thermal slips.');
+    return;
+  }
+  popup.document.write(html);
+  popup.document.close();
+}

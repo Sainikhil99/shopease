@@ -16,6 +16,7 @@ const SalesHistory  = lazy(() => import('./pages/SalesHistory'));
 const Reports       = lazy(() => import('./pages/Reports'));
 const Coupons       = lazy(() => import('./pages/Coupons'));
 const Returns       = lazy(() => import('./pages/Returns'));
+const Expenses      = lazy(() => import('./pages/Expenses'));
 const Inventory     = lazy(() => import('./pages/Inventory'));
 const Settings      = lazy(() => import('./pages/Settings'));
 const AdminLogin    = lazy(() => import('./pages/admin/AdminLogin'));
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="/reports"      element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/coupons"      element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
         <Route path="/returns"      element={<ProtectedRoute><Returns /></ProtectedRoute>} />
+        <Route path="/expenses"     element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
         <Route path="/inventory"    element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
         <Route path="/settings"     element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

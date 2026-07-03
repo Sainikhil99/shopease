@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { printBill } from '../utils/printBill';
+import { printBill, printThermal } from '../utils/printBill';
 import {
   User, Phone, Search, Mic, MicOff, ScanLine, Plus, Minus,
   Trash2, X, Check, ChevronRight, ChevronLeft, ChevronDown,
@@ -907,6 +907,8 @@ function BillingStep({ customer, cart, onCartChange, onComplete, onBack }) {
 // ─── Step 4: Receipt ──────────────────────────────────────────────────────────
 function ReceiptStep({ bill, customer, onNewBill }) {
   const navigate = useNavigate();
+  const { shop } = useApp();
+  const shopForPrint = { shopName: bill.shopName, address: bill.shopAddress, gstin: bill.gstin, phone: bill.shopPhone, upiId: shop?.upiId, paymentPhone: shop?.paymentPhone };
   return (
     <div className="max-w-md mx-auto text-center">
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -953,15 +955,13 @@ function ReceiptStep({ bill, customer, onNewBill }) {
         </div>
       </div>
 
-      <div className="flex gap-3 mb-3">
-        <button onClick={() => printBill(bill, { shopName: bill.shopName, address: bill.shopAddress, gstin: bill.gstin, phone: bill.shopPhone })} className="btn-secondary flex-1 flex items-center justify-center gap-2">
-          <Printer size={15} /> Print / PDF
+      <div className="flex gap-2 mb-3">
+        <button onClick={() => printBill(bill, shopForPrint)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm">
+          <Printer size={14} /> A4 / PDF
         </button>
-        {customer.phone && (
-          <button className="btn-secondary flex-1 flex items-center justify-center gap-2">
-            <Share2 size={15} /> WhatsApp
-          </button>
-        )}
+        <button onClick={() => printThermal(bill, shopForPrint)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm">
+          <Printer size={14} /> Thermal Slip
+        </button>
       </div>
       <div className="flex gap-3">
         <button onClick={onNewBill} className="btn-primary flex-1">New Bill</button>
