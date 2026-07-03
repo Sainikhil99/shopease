@@ -582,6 +582,10 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateStockEntry = (id, updates) => {
+    setStockLedger(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+  };
+
   // ── Bills ──────────────────────────────────────────────────────────────────
   const addBill = (bill) => {
     // Guard against double-tap / double-click submitting the same bill twice
@@ -836,7 +840,7 @@ export function AppProvider({ children }) {
       products, addProduct, updateProduct, deleteProduct,
       bills, addBill,
       returns, addReturn,
-      stockLedger, addStockPurchase,
+      stockLedger, addStockPurchase, updateStockEntry,
       coupons, addCoupon, updateCoupon, deleteCoupon, validateCoupon,
       expenses, addExpense, deleteExpense,
       todaysBills, todaysSales, todaysProfit, lowStockProducts,

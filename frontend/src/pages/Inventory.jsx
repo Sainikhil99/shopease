@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import {
   Plus, Package, TrendingUp, TrendingDown, IndianRupee,
   X, Check, Search, ArrowRight, Printer, FileText,
-  CalendarDays, ChevronDown, AlertTriangle, Boxes, Sparkles
+  CalendarDays, ChevronDown, AlertTriangle, Boxes, Sparkles,
+  Pencil, Download
 } from 'lucide-react';
 
 const CATEGORIES = ['clothing', 'footwear', 'accessories', 'electronics', 'groceries', 'other'];
@@ -662,7 +663,7 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct, recentBatch
 
 // ── Main Inventory Page ───────────────────────────────────────────────────────
 export default function Inventory() {
-  const { products, stockLedger, addStockPurchase, addProduct, shop } = useApp();
+  const { products, stockLedger, addStockPurchase, updateStockEntry, addProduct, shop } = useApp();
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [period, setPeriod]             = useState('month');
@@ -703,6 +704,102 @@ export default function Inventory() {
       .sort((a, b) => new Date(b.date) - new Date(a.date)),
     [stockLedger, range, ownProductIds]
   );
+
+  // Edit entry state
+  const [editingEntry, setEditingEntry]   = useState(null);
+  const [editForm, setEditForm]           = useState({});
+
+  const is24hEditable = (e) => {
+    if (e.type !== 'purchase' && e.type !== 'opening') return false;
+    return Date.now() - new Date(e.date).getTime() < 24 * 60 * 60 * 1000;
+  };
+
+  const openEditEntry = (e) => {
+    setEditingEntry(e);
+    setEditForm({ supplierName: e.supplierName || '', invoiceNo: e.invoiceNo || '', costPrice: String(e.costPrice || ''), note: e.note || '' });
+  };
+
+  const saveEditEntry = () => {
+    if (!editingEntry) return;
+    updateStockEntry(editingEntry.id, {
+      supplierName: editForm.supplierName.trim(),
+      invoiceNo: editForm.invoiceNo.trim(),
+      costPrice: parseFloat(editForm.costPrice) || 0,
+      note: editForm.note.trim(),
+    });
+    setEditingEntry(null);
+  };
+
+  // Print PDF for all entries from the same supplier on the same day
+  const printClientPDF = (entry) => {
+    const entryDate = new Date(entry.date).toDateString();
+    const supplierEntries = historyEntries.filter(e =>
+      e.type === 'purchase' && e.supplierName === entry.supplierName && new Date(e.date).toDateString() === entryDate
+    );
+    const dateStr   = fmtDateTime(entry.date);
+    const totalQty  = supplierEntries.reduce((s, e) => s + e.qty, 0);
+    const totalCost = supplierEntries.reduce((s, e) => s + e.qty * (e.costPrice || 0), 0);
+
+    const rows = supplierEntries.map(e => {
+      const p = products.find(x => x.id === e.productId);
+      return `<tr>
+        <td>${p?.name || '—'}</td>
+        <td style="text-align:center">${p?.category || '—'}</td>
+        <td style="text-align:center;color:#16a34a;font-weight:bold">+${e.qty}</td>
+        <td style="text-align:center">${e.costPrice ? '₹' + parseFloat(e.costPrice).toLocaleString('en-IN') : '—'}</td>
+        <td style="text-align:center">${e.costPrice ? '₹' + (e.qty * parseFloat(e.costPrice)).toLocaleString('en-IN') : '—'}</td>
+        <td style="text-align:center">${e.invoiceNo || '—'}</td>
+        <td>${e.note || '—'}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Stock Receipt — ${entry.supplierName || 'Supplier'}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:24px;max-width:860px;margin:auto}
+      .print-btn{display:block;margin:0 0 16px auto;padding:10px 28px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
+      .shop-header{text-align:center;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px}
+      .shop-header h1{font-size:22px;color:#1d4ed8;font-weight:800}
+      .meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+      .meta-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+      .meta-label{font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px}
+      .meta-value{font-size:13px;font-weight:bold;color:#111;margin-top:3px}
+      .badge{text-align:center;background:#eff6ff;border:2px solid #bfdbfe;border-radius:8px;padding:8px;font-size:15px;font-weight:800;color:#1e40af;margin-bottom:16px;letter-spacing:1px}
+      table{width:100%;border-collapse:collapse}
+      thead th{background:#1d4ed8;color:#fff;padding:8px 6px;text-align:left;font-size:10px;text-transform:uppercase}
+      tbody td{padding:7px 6px;border-bottom:1px solid #f3f4f6;font-size:11px}
+      tbody tr:nth-child(even) td{background:#f9fafb}
+      .total-row td{border-top:2px solid #1d4ed8;background:#eff6ff!important;font-weight:bold;color:#1d4ed8}
+      .footer{text-align:center;margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:10px}
+      @media print{.print-btn{display:none}}
+    </style></head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <div class="shop-header">
+      <h1>${shop?.shopName || ''}</h1>
+      <p>${shop?.address || ''} ${shop?.phone ? '· 📞 ' + shop?.phone : ''}</p>
+    </div>
+    <div class="badge">📦 STOCK-IN RECEIPT — ${(entry.supplierName || 'Supplier').toUpperCase()}</div>
+    <div class="meta-grid">
+      <div class="meta-box"><div class="meta-label">Date</div><div class="meta-value">${dateStr}</div></div>
+      <div class="meta-box"><div class="meta-label">Supplier / Client</div><div class="meta-value">${entry.supplierName || '—'}</div></div>
+      <div class="meta-box"><div class="meta-label">Total</div><div class="meta-value">${supplierEntries.length} items · ${totalQty} pcs · ₹${totalCost.toLocaleString('en-IN')}</div></div>
+    </div>
+    <table><thead><tr>
+      <th>Product</th><th>Category</th><th>Qty</th><th>Cost/Pc</th><th>Total Cost</th><th>Invoice</th><th>Note</th>
+    </tr></thead><tbody>
+      ${rows}
+      <tr class="total-row"><td colspan="2" style="text-align:right;padding-right:12px">TOTAL</td>
+        <td style="text-align:center">+${totalQty}</td><td></td>
+        <td style="text-align:center">₹${totalCost.toLocaleString('en-IN')}</td><td></td><td></td></tr>
+    </tbody></table>
+    <div class="footer"><p>Generated by ShopEase · ${dateStr}</p></div>
+    </body></html>`;
+
+    const win = window.open('', '_blank', 'width=920,height=700');
+    win.document.write(html);
+    win.document.close();
+  };
 
   const handleCreateProduct = (productData) => {
     const newProduct = addProduct(productData);
@@ -948,6 +1045,7 @@ export default function Inventory() {
           <div className="divide-y divide-gray-50">
             {historyEntries.map(e => {
               const product = products.find(p => p.id === e.productId);
+              const editable = is24hEditable(e);
               return (
                 <div key={e.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${
@@ -970,11 +1068,29 @@ export default function Inventory() {
                       {e.note && <span className="ml-2">— {e.note}</span>}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-xl font-black ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
-                      {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
-                    </p>
-                    <p className="text-xs text-gray-400">bal: <span className="font-bold text-gray-600">{e.balanceAfter}</span></p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {e.type === 'purchase' && (
+                      <button
+                        onClick={() => printClientPDF(e)}
+                        title="Download PDF for this supplier"
+                        className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors">
+                        <Download size={15} />
+                      </button>
+                    )}
+                    {editable && (
+                      <button
+                        onClick={() => openEditEntry(e)}
+                        title="Edit entry details"
+                        className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                        <Pencil size={15} />
+                      </button>
+                    )}
+                    <div className="text-right ml-1">
+                      <p className={`text-xl font-black ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
+                        {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
+                      </p>
+                      <p className="text-xs text-gray-400">bal: <span className="font-bold text-gray-600">{e.balanceAfter}</span></p>
+                    </div>
                   </div>
                 </div>
               );
@@ -991,6 +1107,60 @@ export default function Inventory() {
           onCreateProduct={handleCreateProduct}
           recentBatch={loadRecentBatch(shop?.id)}
         />
+      )}
+
+      {/* Edit Entry Modal */}
+      {editingEntry && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-900 text-lg">Edit Entry Details</h3>
+              <button onClick={() => setEditingEntry(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              You can only edit supplier, invoice, cost price and note. Quantity cannot be changed as it affects stock balance.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Supplier / Client Name</label>
+                <input
+                  className="input-field"
+                  value={editForm.supplierName}
+                  onChange={e => setEditForm(f => ({ ...f, supplierName: e.target.value }))}
+                  placeholder="Supplier name" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Invoice Number</label>
+                <input
+                  className="input-field"
+                  value={editForm.invoiceNo}
+                  onChange={e => setEditForm(f => ({ ...f, invoiceNo: e.target.value }))}
+                  placeholder="Invoice number" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Cost Price (₹)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  className="input-field"
+                  value={editForm.costPrice}
+                  onChange={e => setEditForm(f => ({ ...f, costPrice: e.target.value }))}
+                  placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Note</label>
+                <input
+                  className="input-field"
+                  value={editForm.note}
+                  onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+                  placeholder="Optional note" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setEditingEntry(null)} className="flex-1 btn-secondary">Cancel</button>
+              <button onClick={saveEditEntry} className="flex-1 btn-primary">Save Changes</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
