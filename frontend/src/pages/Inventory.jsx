@@ -710,7 +710,7 @@ export default function Inventory() {
   const [editForm, setEditForm]           = useState({});
   const [editSearch, setEditSearch]       = useState('');
   const [editShowDrop, setEditShowDrop]   = useState(false);
-  const EDIT_NEW_EMPTY = { show: false, name: '', category: 'clothing', costPrice: '', qty: '1' };
+  const EDIT_NEW_EMPTY = { show: false, name: '', category: 'clothing', mrp: '', costPrice: '', qty: '1' };
   const [editNewProd, setEditNewProd]     = useState(EDIT_NEW_EMPTY);
 
   const is24hEditable = (e) => {
@@ -761,7 +761,7 @@ export default function Inventory() {
     if (!editNewProd.name.trim() || parseInt(editNewProd.qty) < 1) return;
     const created = handleCreateProduct({
       name: editNewProd.name.trim(), category: editNewProd.category,
-      mrp: 0, sellingPrice: 0, costPrice: parseFloat(editNewProd.costPrice) || 0,
+      mrp: parseFloat(editNewProd.mrp) || 0, sellingPrice: parseFloat(editNewProd.mrp) || 0, costPrice: parseFloat(editNewProd.costPrice) || 0,
       gstRate: 0, stockQty: 0, minStockAlert: 5,
     });
     if (!created) return;
@@ -1408,6 +1408,10 @@ export default function Inventory() {
                           onChange={e => setEditNewProd(p => ({ ...p, category: e.target.value }))}>
                           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
+                        <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5 w-28"
+                          placeholder="MRP ₹"
+                          value={editNewProd.mrp}
+                          onChange={e => setEditNewProd(p => ({ ...p, mrp: e.target.value }))} />
                         <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5 w-28"
                           placeholder="Cost ₹"
                           value={editNewProd.costPrice}
