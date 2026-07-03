@@ -683,10 +683,12 @@ export default function Inventory() {
   // Per-product stats for the period
   const productStats = useMemo(() => products.map(p => {
     const entries   = stockLedger.filter(e => e.productId === p.id && inRange(e.date, range));
-    const addedQty  = entries.filter(e => e.type !== 'sale').reduce((s, e) => s + e.qty, 0);
-    const soldQty   = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
-    const openingQty = Math.max(0, p.stockQty - addedQty + soldQty);
-    return { ...p, openingQty, addedQty, soldQty, closingQty: p.stockQty };
+    const purchasedQty = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
+    const returnedQty  = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
+    const addedQty     = purchasedQty + returnedQty; // total stock-in (for openingQty math)
+    const soldQty      = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+    const openingQty   = Math.max(0, p.stockQty - addedQty + soldQty);
+    return { ...p, openingQty, purchasedQty, returnedQty, addedQty, soldQty, closingQty: p.stockQty };
   }), [products, stockLedger, range]);
 
   // Summary cards
@@ -1092,10 +1094,13 @@ export default function Inventory() {
                       <span className="text-xs text-gray-400 ml-1">pcs</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`font-bold text-base ${p.addedQty > 0 ? 'text-green-600' : 'text-gray-300'}`}>
-                        +{p.addedQty}
+                      <span className={`font-bold text-base ${p.purchasedQty > 0 ? 'text-green-600' : 'text-gray-300'}`}>
+                        +{p.purchasedQty}
                       </span>
                       <span className="text-xs text-gray-400 ml-1">pcs</span>
+                      {p.returnedQty > 0 && (
+                        <div className="text-xs text-orange-500 font-medium mt-0.5">+{p.returnedQty} return</div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`font-bold text-base ${p.soldQty > 0 ? 'text-red-500' : 'text-gray-300'}`}>

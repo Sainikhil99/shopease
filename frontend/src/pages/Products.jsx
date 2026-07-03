@@ -179,9 +179,10 @@ function StockHistoryModal({ product, ledger, onClose }) {
     .filter(e => e.productId === product.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const totalIn  = entries.filter(e => e.type !== 'sale').reduce((s, e) => s + e.qty, 0);
-  const totalOut = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
-  const openingEntry = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+  const totalPurchased = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
+  const totalReturned  = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
+  const totalOut       = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+  const openingEntry   = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
   const typeConfig = {
     opening:  { label: 'Opening Stock', icon: Package,        color: 'text-blue-700',  bg: 'bg-blue-50',   border: 'border-blue-200',   sign: '+' },
@@ -209,22 +210,29 @@ function StockHistoryModal({ product, ledger, onClose }) {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-3 p-5 shrink-0">
+        <div className={`grid gap-3 p-5 shrink-0 ${totalReturned > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
             <p className="text-xs text-blue-500 font-semibold mb-1">Opening Stock</p>
             <p className="text-2xl font-black text-blue-700">{openingEntry?.qty ?? '—'}</p>
             <p className="text-xs text-blue-400 mt-0.5">units</p>
           </div>
           <div className="bg-green-50 rounded-xl p-3 text-center border border-green-100">
-            <p className="text-xs text-green-600 font-semibold mb-1">Total Added</p>
-            <p className="text-2xl font-black text-green-700">+{totalIn}</p>
-            <p className="text-xs text-green-400 mt-0.5">units purchased</p>
+            <p className="text-xs text-green-600 font-semibold mb-1">Purchased</p>
+            <p className="text-2xl font-black text-green-700">+{totalPurchased}</p>
+            <p className="text-xs text-green-400 mt-0.5">from supplier</p>
           </div>
           <div className="bg-red-50 rounded-xl p-3 text-center border border-red-100">
             <p className="text-xs text-red-500 font-semibold mb-1">Total Sold</p>
             <p className="text-2xl font-black text-red-600">−{totalOut}</p>
             <p className="text-xs text-red-400 mt-0.5">units sold</p>
           </div>
+          {totalReturned > 0 && (
+            <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-100 col-span-1">
+              <p className="text-xs text-orange-600 font-semibold mb-1">Customer Returns</p>
+              <p className="text-2xl font-black text-orange-600">+{totalReturned}</p>
+              <p className="text-xs text-orange-400 mt-0.5">returned by customers</p>
+            </div>
+          )}
           <div className={`rounded-xl p-3 text-center border ${product.stockQty === 0 ? 'bg-red-50 border-red-200' : product.stockQty <= product.minStockAlert ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
             <p className={`text-xs font-semibold mb-1 ${product.stockQty === 0 ? 'text-red-500' : product.stockQty <= product.minStockAlert ? 'text-orange-600' : 'text-gray-500'}`}>Current Stock</p>
             <p className={`text-2xl font-black ${product.stockQty === 0 ? 'text-red-600' : product.stockQty <= product.minStockAlert ? 'text-orange-600' : 'text-gray-800'}`}>{product.stockQty}</p>
@@ -323,10 +331,11 @@ export default function Products() {
   };
 
   const productLedger = (product) => {
-    const entries = stockLedger.filter(e => e.productId === product.id);
-    const totalIn  = entries.filter(e => e.type !== 'sale').reduce((s, e) => s + e.qty, 0);
-    const totalOut = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
-    return { totalIn, totalOut };
+    const entries        = stockLedger.filter(e => e.productId === product.id);
+    const totalIn        = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
+    const totalReturned  = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
+    const totalOut       = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+    return { totalIn, totalReturned, totalOut };
   };
 
   const lowCount = products.filter(p => p.stockQty > 0 && p.stockQty <= p.minStockAlert).length;
@@ -378,7 +387,7 @@ export default function Products() {
             </thead>
             <tbody>
               {filtered.map(p => {
-                const { totalIn, totalOut } = productLedger(p);
+                const { totalIn, totalReturned, totalOut } = productLedger(p);
                 const isExpanded = expandedRow === p.id;
                 return [
                   <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
@@ -411,9 +420,10 @@ export default function Products() {
                             {p.stockQty <= p.minStockAlert && p.stockQty > 0 && <AlertTriangle size={12} className="text-orange-500" />}
                             {p.stockQty === 0 && <span className="text-xs bg-red-100 text-red-700 px-1 rounded font-semibold">OUT</span>}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-xs text-green-600 font-medium">+{totalIn} in</span>
                             <span className="text-xs text-red-500 font-medium">−{totalOut} sold</span>
+                            {totalReturned > 0 && <span className="text-xs text-orange-500 font-medium">+{totalReturned} return</span>}
                           </div>
                         </div>
                       </div>
@@ -465,9 +475,16 @@ export default function Products() {
                           </div>
                           <div className="flex items-center gap-1.5 text-green-700">
                             <TrendingUp size={13} />
-                            <span className="font-semibold">Total Added:</span>
+                            <span className="font-semibold">Purchased:</span>
                             <span>+{totalIn} pcs</span>
                           </div>
+                          {totalReturned > 0 && (
+                            <div className="flex items-center gap-1.5 text-orange-600">
+                              <TrendingUp size={13} />
+                              <span className="font-semibold">Customer Returns:</span>
+                              <span>+{totalReturned} pcs</span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-1.5 text-red-600">
                             <TrendingDown size={13} />
                             <span className="font-semibold">Total Sold:</span>
