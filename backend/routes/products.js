@@ -45,7 +45,7 @@ router.get('/barcode/:code', auth, async (req, res) => {
 // POST /api/products
 router.post('/', auth, async (req, res) => {
   const { name, category, barcode, mrp, sellingPrice, costPrice, gstRate, stockQty, minStockAlert, imageUrl } = req.body;
-  if (!name || !mrp || !sellingPrice) return res.status(400).json({ error: 'Name, MRP, and selling price are required' });
+  if (!name) return res.status(400).json({ error: 'Product name is required' });
 
   const result = await query(
     `INSERT INTO products (shop_id, name, category, barcode, mrp, selling_price, cost_price, gst_rate, stock_qty, min_stock_alert, image_url)

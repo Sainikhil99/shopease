@@ -257,13 +257,13 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
   };
 
   const handleCreateProduct = () => {
-    if (!newProd.name.trim() || !newProd.mrp || !newProd.sellingPrice) return;
+    if (!newProd.name.trim()) return;
     setCreating(true);
     const created = onCreateProduct({
       name:          newProd.name.trim(),
       category:      newProd.category,
-      mrp:           parseFloat(newProd.mrp),
-      sellingPrice:  parseFloat(newProd.sellingPrice),
+      mrp:           parseFloat(newProd.mrp) || 0,
+      sellingPrice:  parseFloat(newProd.sellingPrice) || 0,
       costPrice:     parseFloat(newProd.costPrice) || 0,
       gstRate:       parseFloat(newProd.gstRate) || 0,
       minStockAlert: parseInt(newProd.minStockAlert) || 5,
@@ -427,13 +427,13 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">MRP (₹) *</label>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">MRP (₹)</label>
                     <input type="number" min="0" value={newProd.mrp}
                       onChange={e => setNewProd(n => ({ ...n, mrp: e.target.value, sellingPrice: e.target.value }))}
                       className="input-field text-sm" placeholder="0.00" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Selling Price (₹) *</label>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Selling Price (₹)</label>
                     <input type="number" min="0" value={newProd.sellingPrice}
                       onChange={e => setNewProd(n => ({ ...n, sellingPrice: e.target.value }))}
                       className="input-field text-sm" placeholder="0.00" />
@@ -453,7 +453,7 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
                 </div>
 
                 <button type="button" onClick={handleCreateProduct}
-                  disabled={creating || !newProd.name.trim() || !newProd.mrp || !newProd.sellingPrice}
+                  disabled={creating || !newProd.name.trim()}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
                   <Check size={15} />
                   {creating ? 'Creating…' : 'Create Product & Add to Stock List'}
