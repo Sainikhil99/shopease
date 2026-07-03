@@ -665,7 +665,8 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct, recentBatch
 export default function Inventory() {
   const { products, stockLedger, addStockPurchase, updateStockEntry, adjustEntryQty, updateProduct, addProduct, shop } = useApp();
   const navigate = useNavigate();
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal]         = useState(false);
+  const [showAllMovements, setShowAllMovements] = useState(false);
   const [period, setPeriod]             = useState('month');
   const [custom, setCustom]             = useState({ from: '', to: '' });
   const [showCustom, setShowCustom]     = useState(false);
@@ -1003,7 +1004,7 @@ export default function Inventory() {
       <div className="flex flex-wrap items-center gap-2">
         {PERIODS.map(({ key, label }) => (
           <button key={key}
-            onClick={() => { setPeriod(key); if (key === 'custom') setShowCustom(true); else setShowCustom(false); }}
+            onClick={() => { setPeriod(key); setShowAllMovements(false); if (key === 'custom') setShowCustom(true); else setShowCustom(false); }}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
               period === key ? 'bg-blue-600 text-white shadow-sm shadow-blue-200' : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
             }`}>
@@ -1180,7 +1181,7 @@ export default function Inventory() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {historyEntries.map(e => {
+            {(showAllMovements ? historyEntries : historyEntries.slice(0, 5)).map(e => {
               const product = products.find(p => p.id === e.productId);
               const editable = is24hEditable(e);
               return (
@@ -1236,6 +1237,15 @@ export default function Inventory() {
                 </div>
               );
             })}
+            {historyEntries.length > 5 && (
+              <button
+                onClick={() => setShowAllMovements(v => !v)}
+                className="w-full py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+                {showAllMovements
+                  ? <>Show less <ChevronDown size={15} className="rotate-180" /></>
+                  : <>Show all {historyEntries.length} entries <ChevronDown size={15} /></>}
+              </button>
+            )}
           </div>
         )}
       </div>
