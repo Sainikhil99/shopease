@@ -708,24 +708,70 @@ export default function Inventory() {
   // Edit entry state
   const [editingEntry, setEditingEntry]   = useState(null);
   const [editForm, setEditForm]           = useState({});
+  const [editSearch, setEditSearch]       = useState('');
+  const [editShowDrop, setEditShowDrop]   = useState(false);
 
   const is24hEditable = (e) => {
     if (e.type !== 'purchase' && e.type !== 'opening') return false;
     return Date.now() - new Date(e.date).getTime() < 24 * 60 * 60 * 1000;
   };
 
-  const openEditEntry = (e) => {
-    setEditingEntry(e);
-    setEditForm({ supplierName: e.supplierName || '', invoiceNo: e.invoiceNo || '', costPrice: String(e.costPrice || ''), note: e.note || '' });
+  const openEditEntry = (entry) => {
+    const entryDate = new Date(entry.date).toDateString();
+    const batchEntries = stockLedger.filter(e =>
+      e.type === 'purchase' &&
+      e.supplierName === entry.supplierName &&
+      new Date(e.date).toDateString() === entryDate
+    );
+    setEditingEntry(entry);
+    setEditSearch('');
+    setEditShowDrop(false);
+    setEditForm({
+      supplierName: entry.supplierName || '',
+      invoiceNo: entry.invoiceNo || '',
+      items: batchEntries.map(e => {
+        const p = products.find(x => x.id === e.productId);
+        return { entryId: e.id, productId: e.productId, productName: p?.name || '—', qty: e.qty, costPrice: String(e.costPrice || ''), note: e.note || '' };
+      }),
+      newItems: [],
+    });
   };
 
-  const saveEditEntry = () => {
+  const updateEditItem = (idx, field, val) =>
+    setEditForm(f => ({ ...f, items: f.items.map((it, i) => i === idx ? { ...it, [field]: val } : it) }));
+
+  const updateEditNewItem = (idx, field, val) =>
+    setEditForm(f => ({ ...f, newItems: f.newItems.map((it, i) => i === idx ? { ...it, [field]: val } : it) }));
+
+  const addNewEditItem = (product) => {
+    const taken = new Set([...(editForm.items || []).map(i => i.productId), ...(editForm.newItems || []).map(i => i.productId)]);
+    if (taken.has(product.id)) return;
+    setEditForm(f => ({ ...f, newItems: [...f.newItems, { productId: product.id, productName: product.name, qty: '1', costPrice: String(product.costPrice || ''), note: '' }] }));
+    setEditSearch('');
+    setEditShowDrop(false);
+  };
+
+  const removeNewEditItem = (idx) =>
+    setEditForm(f => ({ ...f, newItems: f.newItems.filter((_, i) => i !== idx) }));
+
+  const saveEditBatch = () => {
     if (!editingEntry) return;
-    updateStockEntry(editingEntry.id, {
-      supplierName: editForm.supplierName.trim(),
-      invoiceNo: editForm.invoiceNo.trim(),
-      costPrice: parseFloat(editForm.costPrice) || 0,
-      note: editForm.note.trim(),
+    (editForm.items || []).forEach(item => {
+      updateStockEntry(item.entryId, {
+        supplierName: editForm.supplierName.trim(),
+        invoiceNo: editForm.invoiceNo.trim(),
+        costPrice: parseFloat(item.costPrice) || 0,
+        note: item.note.trim(),
+      });
+    });
+    (editForm.newItems || []).forEach(item => {
+      if (parseInt(item.qty) > 0) {
+        addStockPurchase(
+          item.productId, parseInt(item.qty),
+          editForm.supplierName.trim(), item.note.trim(),
+          parseFloat(item.costPrice) || 0, editForm.invoiceNo.trim()
+        );
+      }
     });
     setEditingEntry(null);
   };
@@ -1110,58 +1156,156 @@ export default function Inventory() {
       )}
 
       {/* Edit Entry Modal */}
-      {editingEntry && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 text-lg">Edit Entry Details</h3>
-              <button onClick={() => setEditingEntry(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-            </div>
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-              You can only edit supplier, invoice, cost price and note. Quantity cannot be changed as it affects stock balance.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Supplier / Client Name</label>
-                <input
-                  className="input-field"
-                  value={editForm.supplierName}
-                  onChange={e => setEditForm(f => ({ ...f, supplierName: e.target.value }))}
-                  placeholder="Supplier name" />
+      {editingEntry && (() => {
+        const editedIds = new Set([...(editForm.items || []).map(i => i.productId), ...(editForm.newItems || []).map(i => i.productId)]);
+        const editFiltered = products.filter(p =>
+          p.isActive !== false && !editedIds.has(p.id) &&
+          (p.name.toLowerCase().includes(editSearch.toLowerCase()) || (p.barcode || '').includes(editSearch))
+        ).slice(0, 12);
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh]">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900 text-lg">Edit Stock Entry</h3>
+                <button onClick={() => setEditingEntry(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Invoice Number</label>
-                <input
-                  className="input-field"
-                  value={editForm.invoiceNo}
-                  onChange={e => setEditForm(f => ({ ...f, invoiceNo: e.target.value }))}
-                  placeholder="Invoice number" />
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {/* Client name — highlighted */}
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4">
+                  <label className="block text-xs font-bold text-amber-700 mb-1.5 uppercase tracking-wide">
+                    Client / Supplier Name *
+                  </label>
+                  <input
+                    autoFocus
+                    className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2.5 font-bold text-gray-900 text-base focus:outline-none focus:ring-2 focus:ring-amber-500 transition-shadow"
+                    value={editForm.supplierName || ''}
+                    onChange={e => setEditForm(f => ({ ...f, supplierName: e.target.value }))}
+                    placeholder="Client or supplier name" />
+                </div>
+
+                {/* Invoice */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Invoice Number</label>
+                  <input className="input-field" value={editForm.invoiceNo || ''}
+                    onChange={e => setEditForm(f => ({ ...f, invoiceNo: e.target.value }))}
+                    placeholder="Invoice number" />
+                </div>
+
+                {/* Existing products in this batch */}
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Products in this entry</p>
+                  <div className="space-y-2">
+                    {(editForm.items || []).map((item, idx) => (
+                      <div key={item.entryId} className="bg-gray-50 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-semibold text-sm text-gray-800">{item.productName}</p>
+                          <span className="text-xs text-green-700 font-bold bg-green-100 px-2 py-0.5 rounded-full">+{item.qty} pcs (locked)</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-0.5 block">Cost/Pc (₹)</label>
+                            <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5"
+                              value={item.costPrice}
+                              onChange={e => updateEditItem(idx, 'costPrice', e.target.value)}
+                              placeholder="0.00" />
+                          </div>
+                          <div className="flex-[2]">
+                            <label className="text-xs text-gray-500 mb-0.5 block">Note</label>
+                            <input className="input-field text-sm py-1.5"
+                              value={item.note}
+                              onChange={e => updateEditItem(idx, 'note', e.target.value)}
+                              placeholder="Optional note" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* New items being added */}
+                {(editForm.newItems || []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">New Products to Add</p>
+                    <div className="space-y-2">
+                      {editForm.newItems.map((item, idx) => (
+                        <div key={idx} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-semibold text-sm text-gray-800">{item.productName}</p>
+                            <button onClick={() => removeNewEditItem(idx)} className="text-red-400 hover:text-red-600 p-1"><X size={14} /></button>
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="w-20">
+                              <label className="text-xs text-gray-500 mb-0.5 block">Qty</label>
+                              <input type="number" min="1" className="input-field text-sm py-1.5"
+                                value={item.qty}
+                                onChange={e => updateEditNewItem(idx, 'qty', e.target.value)}
+                                placeholder="1" />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-xs text-gray-500 mb-0.5 block">Cost/Pc (₹)</label>
+                              <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5"
+                                value={item.costPrice}
+                                onChange={e => updateEditNewItem(idx, 'costPrice', e.target.value)}
+                                placeholder="0.00" />
+                            </div>
+                            <div className="flex-[2]">
+                              <label className="text-xs text-gray-500 mb-0.5 block">Note</label>
+                              <input className="input-field text-sm py-1.5"
+                                value={item.note}
+                                onChange={e => updateEditNewItem(idx, 'note', e.target.value)}
+                                placeholder="Note" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add more products search */}
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Add More Products to this Entry</p>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" value={editSearch}
+                      onChange={e => { setEditSearch(e.target.value); setEditShowDrop(true); }}
+                      onFocus={() => setEditShowDrop(true)}
+                      placeholder="Search product to add…"
+                      className="input-field pl-9 text-sm" />
+                    {editSearch && (
+                      <button onClick={() => { setEditSearch(''); setEditShowDrop(false); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>
+                    )}
+                  </div>
+                  {editShowDrop && editSearch && (
+                    <div className="border border-gray-200 rounded-xl mt-1 overflow-hidden shadow-md">
+                      <div className="max-h-40 overflow-y-auto">
+                        {editFiltered.length > 0 ? editFiltered.map(p => (
+                          <button key={p.id} type="button" onClick={() => addNewEditItem(p)}
+                            className="w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 last:border-0 text-left hover:bg-blue-50 transition-colors">
+                            <span className="font-medium text-sm text-gray-800">{p.name}</span>
+                            <span className="text-xs text-gray-400">{p.stockQty} in stock</span>
+                          </button>
+                        )) : (
+                          <div className="px-4 py-3 text-sm text-gray-400 text-center">No products found</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Cost Price (₹)</label>
-                <input
-                  type="number" min="0" step="0.01"
-                  className="input-field"
-                  value={editForm.costPrice}
-                  onChange={e => setEditForm(f => ({ ...f, costPrice: e.target.value }))}
-                  placeholder="0.00" />
+
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                <button onClick={() => setEditingEntry(null)} className="flex-1 btn-secondary">Cancel</button>
+                <button onClick={saveEditBatch} className="flex-1 btn-primary">Save Changes</button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Note</label>
-                <input
-                  className="input-field"
-                  value={editForm.note}
-                  onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
-                  placeholder="Optional note" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setEditingEntry(null)} className="flex-1 btn-secondary">Cancel</button>
-              <button onClick={saveEditEntry} className="flex-1 btn-primary">Save Changes</button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
