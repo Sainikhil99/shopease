@@ -227,7 +227,7 @@ function printInventoryReport(products, stockLedger, range, periodLabel, shop) {
 }
 
 // ── Add Stock Modal ───────────────────────────────────────────────────────────
-const EMPTY_NEW = { name: '', category: 'clothing', mrp: '', sellingPrice: '', costPrice: '', gstRate: '0', minStockAlert: '5' };
+const EMPTY_NEW = { name: '', category: 'clothing', mrp: '', sellingPrice: '', costPrice: '', gstRate: '0', minStockAlert: '5', qty: '' };
 
 function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
   const [batch, setBatch]         = useState([]);
@@ -270,9 +270,9 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
       stockQty:      0,
       barcode:       '',
     });
-    // Add the freshly-created product to the batch
+    // Add the freshly-created product to the batch with qty pre-filled
     setBatch(prev => [...prev, {
-      product: created, qtyAdded: '', costPrice: String(created.costPrice || ''), note: '',
+      product: created, qtyAdded: newProd.qty || '', costPrice: String(created.costPrice || ''), note: '',
     }]);
     setNewProd(EMPTY_NEW);
     setSearch('');
@@ -444,10 +444,16 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
                       onChange={e => setNewProd(n => ({ ...n, costPrice: e.target.value }))}
                       className="input-field text-sm" placeholder="0.00" />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity Received *</label>
+                    <input type="number" min="1" value={newProd.qty}
+                      onChange={e => setNewProd(n => ({ ...n, qty: e.target.value }))}
+                      className="input-field text-sm" placeholder="0" autoFocus />
+                  </div>
                 </div>
 
                 <button type="button" onClick={handleCreateProduct}
-                  disabled={creating || !newProd.name.trim()}
+                  disabled={creating || !newProd.name.trim() || !newProd.qty || parseInt(newProd.qty) < 1}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
                   <Check size={15} />
                   {creating ? 'Creating…' : 'Create Product & Add to Stock List'}
