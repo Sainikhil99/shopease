@@ -109,13 +109,14 @@ function AddStockModal({ product, onSave, onClose }) {
   const [qty, setQty]           = useState('');
   const [supplier, setSupplier] = useState('');
   const [note, setNote]         = useState('');
+  const [mrp, setMrp]           = useState(String(product.mrp || ''));
   const [cost, setCost]         = useState(String(product.costPrice || ''));
   const [error, setError]       = useState('');
 
   const handleSave = () => {
     const q = parseInt(qty);
     if (!q || q <= 0) { setError('Enter a valid quantity'); return; }
-    onSave(q, supplier.trim(), note.trim(), parseFloat(cost) || product.costPrice || 0);
+    onSave(q, supplier.trim(), note.trim(), parseFloat(cost) || product.costPrice || 0, parseFloat(mrp) || 0);
   };
 
   return (
@@ -144,6 +145,11 @@ function AddStockModal({ product, onSave, onClose }) {
             <label className="block text-xs font-medium text-gray-600 mb-1">Supplier / Source</label>
             <input type="text" value={supplier} onChange={e => setSupplier(e.target.value)}
               placeholder="e.g. Textile Mart, Mumbai" className="input-field" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">MRP (₹)</label>
+            <input type="number" min="0" value={mrp} onChange={e => setMrp(e.target.value)}
+              placeholder={String(product.mrp || 0)} className="input-field" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Cost Price per Piece (₹)</label>
@@ -306,8 +312,9 @@ export default function Products() {
     setShowModal(false); setModalProduct(null);
   };
 
-  const handleAddStock = (qty, supplier, note, cost) => {
+  const handleAddStock = (qty, supplier, note, cost, mrp) => {
     addStockPurchase(addStockFor.id, qty, supplier, note, cost);
+    if (mrp > 0) updateProduct(addStockFor.id, { mrp, sellingPrice: mrp });
     setAddStockFor(null);
   };
 
