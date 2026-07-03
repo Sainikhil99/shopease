@@ -710,6 +710,8 @@ export default function Inventory() {
   const [editForm, setEditForm]           = useState({});
   const [editSearch, setEditSearch]       = useState('');
   const [editShowDrop, setEditShowDrop]   = useState(false);
+  const EDIT_NEW_EMPTY = { show: false, name: '', category: 'clothing', costPrice: '', qty: '1' };
+  const [editNewProd, setEditNewProd]     = useState(EDIT_NEW_EMPTY);
 
   const is24hEditable = (e) => {
     if (e.type !== 'purchase' && e.type !== 'opening') return false;
@@ -726,6 +728,7 @@ export default function Inventory() {
     setEditingEntry(entry);
     setEditSearch('');
     setEditShowDrop(false);
+    setEditNewProd(EDIT_NEW_EMPTY);
     setEditForm({
       supplierName: entry.supplierName || '',
       invoiceNo: entry.invoiceNo || '',
@@ -753,6 +756,23 @@ export default function Inventory() {
 
   const removeNewEditItem = (idx) =>
     setEditForm(f => ({ ...f, newItems: f.newItems.filter((_, i) => i !== idx) }));
+
+  const handleAddEditNewProduct = () => {
+    if (!editNewProd.name.trim() || parseInt(editNewProd.qty) < 1) return;
+    const created = handleCreateProduct({
+      name: editNewProd.name.trim(), category: editNewProd.category,
+      mrp: 0, sellingPrice: 0, costPrice: parseFloat(editNewProd.costPrice) || 0,
+      gstRate: 0, stockQty: 0, minStockAlert: 5,
+    });
+    if (!created) return;
+    setEditForm(f => ({
+      ...f,
+      newItems: [...f.newItems, { productId: created.id, productName: created.name, qty: editNewProd.qty, costPrice: String(created.costPrice || ''), note: '' }],
+    }));
+    setEditNewProd(EDIT_NEW_EMPTY);
+    setEditSearch('');
+    setEditShowDrop(false);
+  };
 
   const printEditBatchPDF = (form, entryDate, shopInfo) => {
     const allItems = [
@@ -1342,30 +1362,66 @@ export default function Inventory() {
                 {/* Add more products search */}
                 <div>
                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Add More Products to this Entry</p>
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" value={editSearch}
-                      onChange={e => { setEditSearch(e.target.value); setEditShowDrop(true); }}
-                      onFocus={() => setEditShowDrop(true)}
-                      placeholder="Search product to add…"
-                      className="input-field pl-9 text-sm" />
-                    {editSearch && (
-                      <button onClick={() => { setEditSearch(''); setEditShowDrop(false); }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>
-                    )}
-                  </div>
-                  {editShowDrop && editSearch && (
+                  {!editNewProd.show && (
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" value={editSearch}
+                        onChange={e => { setEditSearch(e.target.value); setEditShowDrop(true); }}
+                        onFocus={() => setEditShowDrop(true)}
+                        placeholder="Search existing or create new product…"
+                        className="input-field pl-9 text-sm" />
+                      {editSearch && (
+                        <button onClick={() => { setEditSearch(''); setEditShowDrop(false); }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={13} /></button>
+                      )}
+                    </div>
+                  )}
+                  {editShowDrop && editSearch && !editNewProd.show && (
                     <div className="border border-gray-200 rounded-xl mt-1 overflow-hidden shadow-md">
                       <div className="max-h-40 overflow-y-auto">
-                        {editFiltered.length > 0 ? editFiltered.map(p => (
+                        {editFiltered.map(p => (
                           <button key={p.id} type="button" onClick={() => addNewEditItem(p)}
                             className="w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 last:border-0 text-left hover:bg-blue-50 transition-colors">
                             <span className="font-medium text-sm text-gray-800">{p.name}</span>
                             <span className="text-xs text-gray-400">{p.stockQty} in stock</span>
                           </button>
-                        )) : (
-                          <div className="px-4 py-3 text-sm text-gray-400 text-center">No products found</div>
-                        )}
+                        ))}
+                        <button type="button"
+                          onClick={() => { setEditNewProd(p => ({ ...p, show: true, name: editSearch })); setEditShowDrop(false); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-blue-600 hover:bg-blue-50 font-semibold text-sm border-t border-gray-100 transition-colors">
+                          <Sparkles size={13} /> Create "{editSearch}" as new product
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline new product form */}
+                  {editNewProd.show && (
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Create New Product</p>
+                      <input className="input-field text-sm py-1.5" placeholder="Product name *"
+                        value={editNewProd.name}
+                        onChange={e => setEditNewProd(p => ({ ...p, name: e.target.value }))} />
+                      <div className="flex gap-2">
+                        <select className="input-field text-sm py-1.5"
+                          value={editNewProd.category}
+                          onChange={e => setEditNewProd(p => ({ ...p, category: e.target.value }))}>
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5 w-28"
+                          placeholder="Cost ₹"
+                          value={editNewProd.costPrice}
+                          onChange={e => setEditNewProd(p => ({ ...p, costPrice: e.target.value }))} />
+                        <input type="number" min="1" className="input-field text-sm py-1.5 w-20"
+                          placeholder="Qty *"
+                          value={editNewProd.qty}
+                          onChange={e => setEditNewProd(p => ({ ...p, qty: e.target.value }))} />
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => setEditNewProd(EDIT_NEW_EMPTY)}
+                          className="flex-1 btn-secondary text-sm py-1.5">Cancel</button>
+                        <button type="button" onClick={handleAddEditNewProduct}
+                          className="flex-1 btn-primary text-sm py-1.5">Create & Add to Entry</button>
                       </div>
                     </div>
                   )}
