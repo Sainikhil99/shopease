@@ -287,7 +287,7 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
 
   const removeItem = (idx) => setBatch(prev => prev.filter((_, i) => i !== idx));
 
-  const canSave = batch.length > 0 && batch.every(b => parseInt(b.qtyAdded) > 0);
+  const canSave = batch.length > 0 && batch.every(b => parseInt(b.qtyAdded) > 0) && supplier.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
@@ -322,9 +322,9 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
           {/* Shared fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Supplier / Source</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Supplier / Source <span className="text-red-500">*</span></label>
               <input type="text" value={supplier} onChange={e => setSupplier(e.target.value)}
-                placeholder="e.g. Textile Mart, Mumbai" className="input-field" />
+                placeholder="e.g. Textile Mart, Mumbai" className={`input-field ${!supplier.trim() ? 'border-red-300' : ''}`} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Invoice Number</label>
