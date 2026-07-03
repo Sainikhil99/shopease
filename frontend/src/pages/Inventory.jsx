@@ -663,7 +663,7 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct, recentBatch
 
 // ── Main Inventory Page ───────────────────────────────────────────────────────
 export default function Inventory() {
-  const { products, stockLedger, addStockPurchase, updateStockEntry, adjustEntryQty, addProduct, shop } = useApp();
+  const { products, stockLedger, addStockPurchase, updateStockEntry, adjustEntryQty, updateProduct, addProduct, shop } = useApp();
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [period, setPeriod]             = useState('month');
@@ -734,7 +734,7 @@ export default function Inventory() {
       invoiceNo: entry.invoiceNo || '',
       items: batchEntries.map(e => {
         const p = products.find(x => x.id === e.productId);
-        return { entryId: e.id, productId: e.productId, productName: p?.name || '—', qty: String(e.qty), origQty: e.qty, costPrice: String(e.costPrice || ''), note: e.note || '' };
+        return { entryId: e.id, productId: e.productId, productName: p?.name || '—', qty: String(e.qty), origQty: e.qty, mrp: String(p?.mrp || ''), costPrice: String(e.costPrice || ''), note: e.note || '' };
       }),
       newItems: [],
     });
@@ -848,6 +848,10 @@ export default function Inventory() {
         costPrice: parseFloat(item.costPrice) || 0,
         note: item.note.trim(),
       });
+      const newMrp = parseFloat(item.mrp) || 0;
+      if (newMrp > 0) {
+        updateProduct(item.productId, { mrp: newMrp, sellingPrice: newMrp });
+      }
     });
     (editForm.newItems || []).forEach(item => {
       const qty = parseInt(item.qty) || 0;
@@ -1298,6 +1302,13 @@ export default function Inventory() {
                               value={item.qty}
                               onChange={e => updateEditItem(idx, 'qty', e.target.value)}
                               placeholder="1" />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-0.5 block">MRP (₹)</label>
+                            <input type="number" min="0" step="0.01" className="input-field text-sm py-1.5"
+                              value={item.mrp}
+                              onChange={e => updateEditItem(idx, 'mrp', e.target.value)}
+                              placeholder="0.00" />
                           </div>
                           <div className="flex-1">
                             <label className="text-xs text-gray-500 mb-0.5 block">Cost/Pc (₹)</label>
