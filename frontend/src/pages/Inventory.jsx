@@ -444,12 +444,6 @@ function AddStockModal({ products, onSave, onClose, onCreateProduct }) {
                       onChange={e => setNewProd(n => ({ ...n, costPrice: e.target.value }))}
                       className="input-field text-sm" placeholder="0.00" />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Min Stock Alert</label>
-                    <input type="number" min="0" value={newProd.minStockAlert}
-                      onChange={e => setNewProd(n => ({ ...n, minStockAlert: e.target.value }))}
-                      className="input-field text-sm" placeholder="5" />
-                  </div>
                 </div>
 
                 <button type="button" onClick={handleCreateProduct}
