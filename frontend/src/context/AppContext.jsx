@@ -115,6 +115,108 @@ const MOCK_STOCK_LEDGER = [
   { id: 'sl19', productId: 'p8', type: 'sale',     qty: 30, balanceAfter: 0,  date: ago(10),  note: 'Sold out — reorder!',   supplierName: '',              billNumber: 'Multiple', costPrice: 0 },
 ];
 
+// ── API response normalizers (DB returns snake_case, frontend needs camelCase) ──
+function normalizeProduct(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category || 'other',
+    barcode: p.barcode || '',
+    mrp: parseFloat(p.mrp) || 0,
+    sellingPrice: parseFloat(p.selling_price ?? p.sellingPrice) || 0,
+    costPrice: parseFloat(p.cost_price ?? p.costPrice) || 0,
+    gstRate: parseFloat(p.gst_rate ?? p.gstRate) || 0,
+    stockQty: parseInt(p.stock_qty ?? p.stockQty) || 0,
+    minStockAlert: parseInt(p.min_stock_alert ?? p.minStockAlert) || 5,
+    imageUrl: p.image_url || p.imageUrl || null,
+    isActive: p.is_active ?? p.isActive ?? true,
+    createdAt: p.created_at || p.createdAt,
+  };
+}
+
+function normalizeStockEntry(e) {
+  return {
+    id: e.id,
+    productId: e.product_id || e.productId,
+    type: e.type,
+    qty: parseInt(e.qty) || 0,
+    balanceAfter: parseInt(e.balance_after ?? e.balanceAfter) || 0,
+    supplierName: e.supplier_name || e.supplierName || '',
+    invoiceNo: e.invoice_no || e.invoiceNo || '',
+    billNumber: e.bill_number || e.billNumber || '',
+    costPrice: parseFloat(e.cost_price ?? e.costPrice) || 0,
+    note: e.note || '',
+    date: e.created_at || e.createdAt || e.date,
+  };
+}
+
+function normalizeBillItem(item) {
+  return {
+    id: item.id,
+    productId: item.product_id || item.productId || null,
+    productName: item.product_name || item.productName || '',
+    qty: parseInt(item.quantity ?? item.qty) || 0,
+    mrp: parseFloat(item.mrp) || 0,
+    sellingPrice: parseFloat(item.selling_price ?? item.sellingPrice) || 0,
+    discountAmount: parseFloat(item.discount_amount ?? item.discountAmount) || 0,
+    gstRate: parseFloat(item.gst_rate ?? item.gstRate) || 0,
+    itemTotal: parseFloat(item.item_total ?? item.itemTotal) || 0,
+    costPrice: parseFloat(item.cost_price ?? item.costPrice) || 0,
+    isFreeAdded: item.is_free_added || item.isFreeAdded || false,
+  };
+}
+
+function normalizeBill(b) {
+  return {
+    id: b.id,
+    billNumber: b.bill_number || b.billNumber,
+    customerName: b.customer_name || b.customerName || '',
+    customerPhone: b.customer_phone || b.customerPhone || '',
+    subtotal: parseFloat(b.subtotal) || 0,
+    discountAmount: parseFloat(b.discount_amount ?? b.discountAmount) || 0,
+    taxAmount: parseFloat(b.tax_amount ?? b.taxAmount) || 0,
+    total: parseFloat(b.total) || 0,
+    paymentMode: b.payment_mode || b.paymentMode || 'cash',
+    couponCode: b.coupon_code || b.couponCode || null,
+    status: b.status || 'completed',
+    items: Array.isArray(b.items) ? b.items.map(normalizeBillItem) : [],
+    createdAt: b.created_at || b.createdAt,
+    hasReturn: b.has_return || b.hasReturn || false,
+    returnedAmount: parseFloat(b.returned_amount ?? b.returnedAmount) || 0,
+  };
+}
+
+function normalizeCoupon(c) {
+  return {
+    id: c.id,
+    code: c.code,
+    type: c.type || 'flat',
+    value: parseFloat(c.value) || 0,
+    minPurchase: parseFloat(c.min_purchase ?? c.minPurchase) || 0,
+    expiryDate: c.expiry_date || c.expiryDate,
+    timesUsed: parseInt(c.times_used ?? c.timesUsed) || 0,
+    isActive: c.is_active ?? c.isActive ?? true,
+    buyN: c.buy_n || c.buyN,
+    getFree: c.get_free || c.getFree,
+  };
+}
+
+function normalizeReturn(r) {
+  return {
+    id: r.id,
+    returnNumber: r.return_number || r.returnNumber,
+    originalBillId: r.original_bill_id || r.originalBillId,
+    originalBillNumber: r.original_bill_number || r.originalBillNumber,
+    customerName: r.customer_name || r.customerName || '',
+    refundAmount: parseFloat(r.refund_amount ?? r.refundAmount) || 0,
+    refundMode: r.refund_mode || r.refundMode || 'cash',
+    reason: r.reason || '',
+    items: Array.isArray(r.items) ? r.items : [],
+    returnedAt: r.returned_at || r.returnedAt,
+    createdAt: r.created_at || r.createdAt,
+  };
+}
+
 function loadShops() {
   try {
     const s = localStorage.getItem('shopease_shops');
@@ -210,6 +312,15 @@ export function AppProvider({ children }) {
     } catch { return SEED_IDS.includes(id) ? MOCK_STOCK_LEDGER : []; }
   });
 
+  const [expenses, setExpenses] = useState(() => {
+    const id = currentSavedShop?.id;
+    if (!id || !sessionStorage.getItem('shopease_token')) return [];
+    try {
+      const saved = localStorage.getItem(`shopease_expenses_${id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
   // Persist shops to localStorage whenever they change
   useEffect(() => {
     safeSet('shopease_shops', allShops);
@@ -233,6 +344,9 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (isLoggedIn && shop?.id) safeSet(`shopease_stock_${shop.id}`, stockLedger);
   }, [isLoggedIn, stockLedger, shop?.id]);
+  useEffect(() => {
+    if (isLoggedIn && shop?.id) safeSet(`shopease_expenses_${shop.id}`, expenses);
+  }, [isLoggedIn, expenses, shop?.id]);
 
   // ── Auth validation ────────────────────────────────────────────────────────
   const validatePhoneLogin = (phone) => {
@@ -279,6 +393,7 @@ export function AppProvider({ children }) {
     const cachedCoupons  = safeGet(`shopease_coupons_${sid}`,  isSeed ? MOCK_COUPONS : []);
     const cachedReturns  = safeGet(`shopease_returns_${sid}`,  []);
     const cachedStock    = safeGet(`shopease_stock_${sid}`,    isSeed ? MOCK_STOCK_LEDGER : []);
+    const cachedExpenses = safeGet(`shopease_expenses_${sid}`, []);
     const validBillIds   = new Set(cachedBills.map(b => b.id));
     const validProdIds   = new Set(cachedProducts.map(p => p.id));
 
@@ -287,6 +402,7 @@ export function AppProvider({ children }) {
     setCoupons(cachedCoupons);
     setReturns(cachedReturns.filter(r => !r.originalBillId || validBillIds.has(r.originalBillId)));
     setStockLedger(cachedStock.filter(e => validProdIds.has(e.productId)));
+    setExpenses(cachedExpenses);
 
     // Step 2 — refresh from backend in background (only when we have a real JWT)
     if (token) {
@@ -297,26 +413,27 @@ export function AppProvider({ children }) {
         api.get('/api/coupons'),
         api.get('/api/returns?limit=200'),
         api.get('/api/stock?limit=2000'),
-      ]).then(([prodsRes, billsRes, couponsRes, retsRes, stockRes]) => {
-        const prods = prodsRes.products  || [];
-        const bills = billsRes.bills     || [];
-        const cpns  = Array.isArray(couponsRes) ? couponsRes : (couponsRes.coupons || []);
-        const rets  = retsRes.returns    || [];
-        // Normalize API entries: map createdAt → date so Inventory.jsx filters work
-        const stockEntries = (stockRes.entries || []).map(e => ({
-          ...e, date: e.createdAt,
-        }));
+        api.get('/api/expenses?limit=500'),
+      ]).then(([prodsRes, billsRes, couponsRes, retsRes, stockRes, expsRes]) => {
+        const prods = (prodsRes.products  || []).map(normalizeProduct);
+        const bills = (billsRes.bills     || []).map(normalizeBill);
+        const cpns  = (Array.isArray(couponsRes) ? couponsRes : (couponsRes.coupons || [])).map(normalizeCoupon);
+        const rets  = (retsRes.returns    || []).map(normalizeReturn);
+        const exps  = expsRes.expenses    || [];
+        const stockEntries = (stockRes.entries || []).map(normalizeStockEntry);
         setProducts(prods);
         setBills(bills);
         setCoupons(cpns);
         setReturns(rets);
         setStockLedger(stockEntries);
+        setExpenses(exps);
         // Update localStorage cache with fresh data
         safeSet(`shopease_products_${sid}`, prods);
         safeSet(`shopease_bills_${sid}`,    bills);
         safeSet(`shopease_coupons_${sid}`,  cpns);
         safeSet(`shopease_returns_${sid}`,  rets);
         safeSet(`shopease_stock_${sid}`,    stockEntries);
+        safeSet(`shopease_expenses_${sid}`, exps);
       }).catch(() => {
         // Backend unreachable — cached data already in state, no action needed
       }).finally(() => setIsLoading(false));
@@ -333,6 +450,7 @@ export function AppProvider({ children }) {
     setCoupons([]);
     setReturns([]);
     setStockLedger([]);
+    setExpenses([]);
     setIsLoggedIn(false);
   }, []);
 
@@ -402,7 +520,8 @@ export function AppProvider({ children }) {
   // If the backend is offline, localStorage persistence (via the useEffect below) keeps data safe.
   const addProduct = (product) => {
     const id = `p${Date.now()}`;
-    setProducts(prev => [...prev, { ...product, id, isActive: true }]);
+    const newProduct = { ...product, id, isActive: true };
+    setProducts(prev => [...prev, newProduct]);
     if (product.stockQty > 0) {
       const entry = {
         id: `sl${Date.now()}`, productId: id, type: 'opening',
@@ -425,6 +544,7 @@ export function AppProvider({ children }) {
     } else {
       api.post('/api/products', product).catch(() => {});
     }
+    return newProduct;
   };
   const updateProduct = (id, updates) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -632,6 +752,37 @@ export function AppProvider({ children }) {
     [products]
   );
 
+  const todaysExpenses = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    return expenses.filter(e => {
+      const d = new Date((e.expenseDate || (e.createdAt || '')).replace('T', ' '));
+      return d.toDateString() === todayStr;
+    });
+  }, [expenses]);
+
+  const todaysExpenseTotal = useMemo(
+    () => todaysExpenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0),
+    [todaysExpenses]
+  );
+
+  const addExpense = async (expense) => {
+    const tempId = `exp-${Date.now()}`;
+    const temp   = {
+      ...expense, id: tempId, createdAt: new Date().toISOString(),
+      expenseDate: expense.expenseDate || new Date().toISOString().split('T')[0],
+    };
+    setExpenses(prev => [temp, ...prev]);
+    try {
+      const res = await api.post('/api/expenses', expense);
+      setExpenses(prev => prev.map(e => e.id === tempId ? res : e));
+    } catch { /* keep optimistic */ }
+  };
+
+  const deleteExpense = async (id) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    api.delete(`/api/expenses/${id}`).catch(() => {});
+  };
+
   // Force logout when any API call gets a 401 (expired token in another tab, etc.)
   useEffect(() => {
     const handler = () => logout();
@@ -687,7 +838,9 @@ export function AppProvider({ children }) {
       returns, addReturn,
       stockLedger, addStockPurchase,
       coupons, addCoupon, updateCoupon, deleteCoupon, validateCoupon,
+      expenses, addExpense, deleteExpense,
       todaysBills, todaysSales, todaysProfit, lowStockProducts,
+      todaysExpenses, todaysExpenseTotal,
     }}>
       {children}
     </AppContext.Provider>
