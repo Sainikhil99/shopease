@@ -48,7 +48,7 @@ const signToken = (shopId, phone) =>
   jwt.sign(
     { shopId, phone, jti: `${shopId}-${Date.now()}` },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRY || '8h' }
+    { expiresIn: process.env.JWT_EXPIRY || '30d' }
   );
 
 // ── POST /api/auth/send-otp ───────────────────────────────────────────────────

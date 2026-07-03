@@ -4,14 +4,11 @@ export class ApiError extends Error {
   constructor(message, status = 0) {
     super(message);
     this.name = 'ApiError';
-    // status 0  = network error (backend unreachable)
-    // status 4xx = client error (wrong credentials, not found, etc.)
-    // status 5xx = server error
     this.status = status;
   }
 }
 
-async function apiFetch(path, { method = 'GET', body } = {}) {
+async function apiFetch(path, { method = 'GET', body, silent = false } = {}) {
   const token = sessionStorage.getItem('shopease_token');
 
   let res;
@@ -25,15 +22,16 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
   } catch (err) {
-    // Network error — backend is down or unreachable
     throw new ApiError(err.message || 'Cannot connect to server', 0);
   }
 
   if (res.status === 401) {
-    // Token expired — fire an event so AppContext can clear auth state
-    sessionStorage.removeItem('shopease_token');
-    localStorage.removeItem('shopease_current_shop');
-    window.dispatchEvent(new Event('shopease:session-expired'));
+    // Only force-logout for user-initiated calls, not background syncs
+    if (!silent) {
+      sessionStorage.removeItem('shopease_token');
+      localStorage.removeItem('shopease_current_shop');
+      window.dispatchEvent(new Event('shopease:session-expired'));
+    }
     throw new ApiError('Session expired. Please log in again.', 401);
   }
 
@@ -47,10 +45,20 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// User-initiated calls — a 401 will log the user out
 export const api = {
   get:    (path)        => apiFetch(path),
   post:   (path, body)  => apiFetch(path, { method: 'POST',   body }),
   put:    (path, body)  => apiFetch(path, { method: 'PUT',    body }),
   patch:  (path, body)  => apiFetch(path, { method: 'PATCH',  body }),
   delete: (path)        => apiFetch(path, { method: 'DELETE' }),
+};
+
+// Background sync calls — a 401 is silently ignored, never forces logout
+export const bgApi = {
+  get:    (path)        => apiFetch(path,                        { silent: true }),
+  post:   (path, body)  => apiFetch(path, { method: 'POST',   body, silent: true }),
+  put:    (path, body)  => apiFetch(path, { method: 'PUT',    body, silent: true }),
+  patch:  (path, body)  => apiFetch(path, { method: 'PATCH',  body, silent: true }),
+  delete: (path)        => apiFetch(path, { method: 'DELETE',       silent: true }),
 };

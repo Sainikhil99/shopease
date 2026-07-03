@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { safeGet, safeSet, safeRemove } from '../utils/storage';
-import { api } from '../utils/api';
+import { api, bgApi } from '../utils/api';
 
 const AppContext = createContext(null);
 
@@ -531,10 +531,10 @@ export function AppProvider({ children }) {
       };
       setStockLedger(prev => [...prev, entry]);
       // Sync to backend once the product is created so we have a real product UUID
-      api.post('/api/products', product).then(res => {
+      bgApi.post('/api/products', product).then(res => {
         const realId = res?.id;
         if (realId) {
-          api.post('/api/stock', {
+          bgApi.post('/api/stock', {
             productId: realId, type: 'opening', qty: product.stockQty,
             balanceAfter: product.stockQty, costPrice: product.costPrice || 0,
             note: 'Opening stock',
@@ -542,18 +542,18 @@ export function AppProvider({ children }) {
         }
       }).catch(() => {});
     } else {
-      api.post('/api/products', product).catch(() => {});
+      bgApi.post('/api/products', product).catch(() => {});
     }
     return newProduct;
   };
   const updateProduct = (id, updates) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    api.put(`/api/products/${id}`, updates).catch(() => {});
+    bgApi.put(`/api/products/${id}`, updates).catch(() => {});
   };
   const deleteProduct = (id) => {
     setProducts(prev => prev.filter(p => p.id !== id));
     setStockLedger(prev => prev.filter(e => e.productId !== id));
-    api.delete(`/api/products/${id}`).catch(() => {});
+    bgApi.delete(`/api/products/${id}`).catch(() => {});
   };
 
   const addStockPurchase = (productId, qty, supplierName, note, costPrice, invoiceNo) => {
@@ -561,7 +561,7 @@ export function AppProvider({ children }) {
     if (!product) return;
     const newBalance = product.stockQty + qty;
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stockQty: newBalance } : p));
-    api.put(`/api/products/${productId}`, { stockQty: newBalance }).catch(() => {});
+    bgApi.put(`/api/products/${productId}`, { stockQty: newBalance }).catch(() => {});
     const entry = {
       id: `sl${Date.now()}`, productId, type: 'purchase',
       qty, balanceAfter: newBalance,
@@ -574,7 +574,7 @@ export function AppProvider({ children }) {
     setStockLedger(prev => [...prev, entry]);
     // Persist to backend — only if productId is a real UUID (not a local temp id)
     if (/^[0-9a-f]{8}-/i.test(productId)) {
-      api.post('/api/stock', {
+      bgApi.post('/api/stock', {
         productId, type: 'purchase', qty, balanceAfter: newBalance,
         supplierName: supplierName || null, invoiceNo: invoiceNo || null,
         costPrice: costPrice || product.costPrice || 0, note: note || 'Stock added',
@@ -621,7 +621,7 @@ export function AppProvider({ children }) {
     // Sync sale ledger entries for products with real UUIDs
     const stockApiEntries = ledgerEntries.filter(e => /^[0-9a-f]{8}-/i.test(e.productId));
     if (stockApiEntries.length) {
-      api.post('/api/stock/batch', {
+      bgApi.post('/api/stock/batch', {
         entries: stockApiEntries.map(e => ({
           productId: e.productId, type: 'sale', qty: e.qty,
           balanceAfter: e.balanceAfter, billNumber: e.billNumber, note: e.note,
@@ -630,7 +630,7 @@ export function AppProvider({ children }) {
     }
 
     // Persist bill to backend in background — doesn't block the UI
-    api.post('/api/bills', bill).catch(() => {
+    bgApi.post('/api/bills', bill).catch(() => {
       setBills(prev => prev.map(b => b.id === newBill.id ? { ...b, _offline: true } : b));
     });
 
@@ -675,7 +675,7 @@ export function AppProvider({ children }) {
     // Sync return ledger entries for products with real UUIDs
     const retApiEntries = retLedger.filter(e => /^[0-9a-f]{8}-/i.test(e.productId));
     if (retApiEntries.length) {
-      api.post('/api/stock/batch', {
+      bgApi.post('/api/stock/batch', {
         entries: retApiEntries.map(e => ({
           productId: e.productId, type: 'return', qty: e.qty,
           balanceAfter: e.balanceAfter, billNumber: e.billNumber, note: e.note,
@@ -684,7 +684,7 @@ export function AppProvider({ children }) {
     }
 
     // Persist to backend in background
-    api.post('/api/returns', returnData).catch(() => {});
+    bgApi.post('/api/returns', returnData).catch(() => {});
 
     return newReturn;
   };
@@ -693,21 +693,21 @@ export function AppProvider({ children }) {
   const addCoupon = (coupon) => {
     const id = `c${Date.now()}`;
     setCoupons(prev => [...prev, { ...coupon, id, timesUsed: 0 }]);
-    api.post('/api/coupons', coupon).catch(() => {});
+    bgApi.post('/api/coupons', coupon).catch(() => {});
   };
   const updateCoupon = (id, updates) => {
     setCoupons(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    api.put(`/api/coupons/${id}`, updates).catch(() => {});
+    bgApi.put(`/api/coupons/${id}`, updates).catch(() => {});
   };
   const deleteCoupon = (id) => {
     setCoupons(prev => prev.filter(c => c.id !== id));
-    api.delete(`/api/coupons/${id}`).catch(() => {});
+    bgApi.delete(`/api/coupons/${id}`).catch(() => {});
   };
 
   const updateShop = (updates) => {
     setShop(prev => ({ ...prev, ...updates }));
     setAllShops(prev => prev.map(s => s.id === shop.id ? { ...s, ...updates } : s));
-    api.put('/api/settings', updates).catch(() => {});
+    bgApi.put('/api/settings', updates).catch(() => {});
   };
 
   const validateCoupon = (code, total) => {
@@ -780,7 +780,7 @@ export function AppProvider({ children }) {
 
   const deleteExpense = async (id) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
-    api.delete(`/api/expenses/${id}`).catch(() => {});
+    bgApi.delete(`/api/expenses/${id}`).catch(() => {});
   };
 
   // Force logout when any API call gets a 401 (expired token in another tab, etc.)
