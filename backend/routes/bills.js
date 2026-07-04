@@ -54,7 +54,7 @@ router.get('/:id', auth, async (req, res) => {
 // POST /api/bills — create bill, reduce stock, generate PDF
 router.post('/', auth, async (req, res) => {
   const { customerName, customerPhone, items, subtotal, discountAmount, taxAmount, total, paymentMode, couponCode } = req.body;
-  if (!customerName || !items?.length || !total) return res.status(400).json({ error: 'Missing required bill data' });
+  if (!items?.length || !total) return res.status(400).json({ error: 'Missing required bill data' });
 
   const client = await pool.connect();
   try {

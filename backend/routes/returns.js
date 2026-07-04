@@ -26,8 +26,8 @@ router.get('/', auth, async (req, res) => {
 // POST /api/returns — process a return, restore stock, mark bill refunded
 router.post('/', auth, async (req, res) => {
   const { originalBillId, originalBillNumber, customerName, customerPhone, items, refundAmount, reason } = req.body;
-  if (!customerName || !items?.length || !refundAmount) {
-    return res.status(400).json({ error: 'customerName, items, and refundAmount are required' });
+  if (!items?.length || !refundAmount) {
+    return res.status(400).json({ error: 'items and refundAmount are required' });
   }
 
   const client = await pool.connect();

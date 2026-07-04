@@ -9,83 +9,105 @@ const PAYMENT_EMOJI  = { cash: '💵', upi: '📲', phonepe: '🟣', googlepay: 
 const REASONS = ['Customer not satisfied', 'Wrong size / colour', 'Defective / damaged', 'Duplicate purchase', 'Other'];
 
 function printReturnBill(ret, shop) {
-  const fmt = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
-  const payLabel = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
-  const totalQty = ret.items.reduce((s, i) => s + (i.returnQty || i.qty || 0), 0);
+  const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card / Debit' };
+  const payLabel = PAYMENT_LABELS[ret.paymentMode] || ret.paymentMode?.toUpperCase() || '—';
+  const date = new Date(ret.returnedAt || Date.now()).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  const refund = parseFloat(ret.refundAmount ?? 0);
 
-  const itemRows = ret.items.map(item => {
+  const itemRows = (ret.items || []).map(item => {
     const qty   = item.returnQty || item.qty || 0;
-    const price = item.sellingPrice || 0;
-    return `<tr>
-      <td>${item.productName}</td>
-      <td style="text-align:center">${qty}</td>
-      <td style="text-align:right">₹${price.toLocaleString('en-IN')}</td>
-      <td style="text-align:right;font-weight:bold">₹${(qty * price).toLocaleString('en-IN')}</td>
-    </tr>`;
+    const price = parseFloat(item.sellingPrice ?? 0);
+    const total = price * qty;
+    return `
+      <tr>
+        <td>${item.productName || '—'}</td>
+        <td class="right">₹${price.toFixed(2)}</td>
+        <td class="center">${qty}</td>
+        <td class="right bold">₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+      </tr>`;
   }).join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>Return Bill — ${ret.returnNumber}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:24px;max-width:480px;margin:auto}
-    .print-btn{display:block;margin:0 0 16px auto;padding:8px 24px;background:#ea580c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
-    .shop-header{text-align:center;padding-bottom:10px;margin-bottom:14px;border-bottom:2px solid #ea580c}
-    .shop-header h1{font-size:18px;color:#ea580c;font-weight:800}
-    .shop-header p{color:#555;font-size:10px;margin-top:2px}
-    .badge{text-align:center;background:#fff7ed;border:2px solid #fed7aa;border-radius:8px;padding:8px 0;font-size:14px;font-weight:800;color:#c2410c;margin-bottom:14px;letter-spacing:1px}
-    .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-    .meta-box{background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px}
-    .meta-label{font-size:8px;color:#9a3412;text-transform:uppercase;letter-spacing:.5px}
-    .meta-value{font-size:11px;font-weight:bold;color:#111;margin-top:2px}
-    table{width:100%;border-collapse:collapse;margin-bottom:12px}
-    thead th{background:#ea580c;color:#fff;padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase}
-    tbody td{padding:6px 8px;border-bottom:1px solid #fef3c7;font-size:11px}
-    tbody tr:nth-child(even) td{background:#fff7ed}
-    .total-row{border-top:2px solid #ea580c;background:#fff7ed}
-    .total-row td{padding:8px;font-weight:bold;color:#c2410c;font-size:13px}
-    .refund-box{background:#ea580c;color:#fff;border-radius:12px;padding:14px;text-align:center;margin-bottom:12px}
-    .refund-box .label{font-size:10px;opacity:.85;margin-bottom:4px}
-    .refund-box .amount{font-size:28px;font-weight:900}
-    .footer{text-align:center;margin-top:18px;padding-top:10px;border-top:1px dashed #fed7aa;color:#9a3412;font-size:9px}
-    @media print{.print-btn{display:none}}
-  </style></head><body>
-  <button class="print-btn" onclick="window.print()">🖨️ Print Return Bill</button>
-  <div class="shop-header">
-    <h1>${shop?.shopName || 'ShopEase'}</h1>
-    <p>${shop?.address || ''} ${shop?.phone ? '· ' + shop.phone : ''} ${shop?.gstin ? '· GSTIN: ' + shop.gstin : ''}</p>
-  </div>
-  <div class="badge">↩ RETURN RECEIPT</div>
-  <div class="meta">
-    <div class="meta-box"><div class="meta-label">Return No.</div><div class="meta-value">${ret.returnNumber}</div></div>
-    <div class="meta-box"><div class="meta-label">Date &amp; Time</div><div class="meta-value">${fmt(ret.returnedAt || new Date())}</div></div>
-    <div class="meta-box"><div class="meta-label">Customer</div><div class="meta-value">${ret.customerName || 'Walk-in'}${ret.customerPhone ? ' · ' + ret.customerPhone : ''}</div></div>
-    <div class="meta-box"><div class="meta-label">Original Bill</div><div class="meta-value">${ret.originalBillNumber}</div></div>
-    ${ret.reason ? `<div class="meta-box" style="grid-column:1/-1"><div class="meta-label">Return Reason</div><div class="meta-value">${ret.reason}</div></div>` : ''}
-  </div>
-  <table>
-    <thead><tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>
-      ${itemRows}
-      <tr class="total-row">
-        <td colspan="2">${totalQty} item${totalQty !== 1 ? 's' : ''} returned</td>
-        <td colspan="2" style="text-align:right">Refund: ₹${ret.refundAmount.toLocaleString('en-IN')}</td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="refund-box">
-    <div class="label">REFUND AMOUNT via ${payLabel[ret.paymentMode] || ret.paymentMode}</div>
-    <div class="amount">₹${ret.refundAmount.toLocaleString('en-IN')}</div>
-  </div>
-  <div class="footer">
-    <p>Thank you · Stock restored for returned items</p>
-    <p style="margin-top:4px">Generated by ShopEase · ${fmt(new Date().toISOString())}</p>
-  </div>
-  </body></html>`;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Return ${ret.returnNumber || ''}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;font-size:12px;color:#111;background:#fff;padding:24px;max-width:320px;margin:0 auto}
+  .shop-name{font-size:16px;font-weight:bold;text-align:center;margin-bottom:2px}
+  .shop-addr{font-size:10px;text-align:center;color:#444;white-space:pre-wrap;margin-bottom:2px}
+  .gstin{font-size:10px;text-align:center;color:#555;margin-bottom:8px}
+  .divider{border:none;border-top:1px dashed #999;margin:6px 0}
+  .ret-badge{text-align:center;font-size:13px;font-weight:bold;letter-spacing:2px;margin:4px 0 6px;border:1px solid #999;padding:3px 0}
+  .meta{font-size:11px;margin:4px 0}
+  .meta span{float:right;font-weight:bold}
+  table{width:100%;border-collapse:collapse;margin:6px 0}
+  th{font-size:10px;text-align:left;border-bottom:1px solid #999;padding:3px 2px;font-weight:bold}
+  td{font-size:11px;padding:4px 2px;vertical-align:top}
+  .right{text-align:right}
+  .center{text-align:center}
+  .bold{font-weight:bold}
+  .totals{margin-top:6px}
+  .totals .row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+  .totals .total-row{font-size:14px;font-weight:bold;border-top:1px solid #999;margin-top:4px;padding-top:4px}
+  .footer{text-align:center;font-size:10px;color:#666;margin-top:10px}
+  .print-btn{display:block;margin:16px auto 0;padding:8px 24px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;font-family:sans-serif}
+  @media print{.print-btn{display:none}body{padding:8px}}
+</style>
+</head>
+<body>
+  <div class="shop-name">${shop?.shopName || 'ShopEase'}</div>
+  <div class="shop-addr">${shop?.address || ''}</div>
+  ${shop?.gstin  ? `<div class="gstin">GSTIN: ${shop.gstin}</div>` : ''}
+  ${shop?.phone  ? `<div class="gstin">Ph: ${shop.phone}</div>`    : ''}
 
-  const win = window.open('', '_blank', 'width=520,height=700');
-  win.document.write(html);
-  win.document.close();
+  <hr class="divider">
+  <div class="ret-badge">*** RETURN RECEIPT ***</div>
+  <hr class="divider">
+
+  <div class="meta">Return No: <span>${ret.returnNumber || '—'}</span></div>
+  <div class="meta">Date: <span>${date}</span></div>
+  <div class="meta">Customer: <span>${ret.customerName || 'Walk-in'}</span></div>
+  ${ret.customerPhone ? `<div class="meta">Phone: <span>+91 ${ret.customerPhone}</span></div>` : ''}
+  <div class="meta">Orig. Bill: <span>${ret.originalBillNumber || '—'}</span></div>
+  ${ret.reason ? `<div class="meta">Reason: <span>${ret.reason}</span></div>` : ''}
+  <hr class="divider">
+
+  <table>
+    <thead><tr>
+      <th>Item</th>
+      <th class="right">Price</th>
+      <th class="center">Qty</th>
+      <th class="right">Total</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+
+  <hr class="divider">
+  <div class="totals">
+    <div class="row total-row"><span>REFUND AMOUNT</span><span>₹${refund.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+    <div class="row" style="margin-top:4px"><span>Refund via</span><span>${payLabel}</span></div>
+  </div>
+
+  <hr class="divider">
+  <div class="footer">
+    <p>Stock restored for returned items.</p>
+    <p style="margin-top:2px">Thank you! Visit again.</p>
+    <p style="margin-top:4px">Powered by ShopEase</p>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  <script>setTimeout(()=>window.print(),400)</script>
+</body>
+</html>`;
+
+  const popup = window.open('', '_blank', 'width=400,height=600');
+  if (!popup) { alert('Please allow popups to print return bills.'); return; }
+  popup.document.write(html);
+  popup.document.close();
 }
 
 export default function Returns() {
@@ -111,7 +133,7 @@ export default function Returns() {
   const matchedBills = q.length >= 2
     ? bills.filter(b =>
         b.billNumber.toLowerCase().includes(q) ||
-        b.customerName.toLowerCase().includes(q)
+        (b.customerName || '').toLowerCase().includes(q)
       )
     : bills.slice(0, 8);  // show 8 recent bills when no query
 
@@ -256,7 +278,7 @@ export default function Returns() {
                       <div>
                         <div className="font-semibold text-sm text-gray-800">{bill.billNumber}</div>
                         <div className="text-xs text-gray-500 mt-0.5">
-                          {bill.customerName} · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {bill.customerName || 'Walk-in'} · {new Date(bill.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">
                           {bill.items.length} item{bill.items.length !== 1 ? 's' : ''} · {PAYMENT_EMOJI[bill.paymentMode]} {PAYMENT_LABELS[bill.paymentMode]}
@@ -288,7 +310,7 @@ export default function Returns() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="font-bold text-gray-800">{selectedBill.billNumber}</div>
-                <div className="text-sm text-gray-500">{selectedBill.customerName}{selectedBill.customerPhone ? ` · +91 ${selectedBill.customerPhone}` : ''}</div>
+                <div className="text-sm text-gray-500">{selectedBill.customerName || 'Walk-in'}{selectedBill.customerPhone ? ` · +91 ${selectedBill.customerPhone}` : ''}</div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   {new Date(selectedBill.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -410,7 +432,7 @@ export default function Returns() {
 
           {/* Refund box */}
           <div className="bg-orange-600 text-white rounded-2xl p-5 mb-4">
-            <p className="text-orange-200 text-sm mb-1">Refund to {selectedBill.customerName}</p>
+            <p className="text-orange-200 text-sm mb-1">Refund to {selectedBill.customerName || 'Walk-in Customer'}</p>
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-orange-200 text-xs mt-2">Return via</p>
@@ -467,7 +489,7 @@ export default function Returns() {
           <div className="bg-white border border-gray-200 rounded-2xl p-5 text-left mb-6 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Customer</span>
-              <span className="font-semibold">{done.customerName}</span>
+              <span className="font-semibold">{done.customerName || 'Walk-in'}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Original Bill</span>

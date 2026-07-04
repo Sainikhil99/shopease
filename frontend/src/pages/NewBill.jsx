@@ -37,16 +37,18 @@ function StepIndicator({ current }) {
 // ─── Step 1: Customer ─────────────────────────────────────────────────────────
 function CustomerStep({ data, onChange, onNext }) {
   return (
-    <form onSubmit={e => { e.preventDefault(); if (!data.name.trim()) return; onNext(); }} className="max-w-md mx-auto">
+    <form onSubmit={e => { e.preventDefault(); onNext(); }} className="max-w-md mx-auto">
       <h2 className="text-xl font-bold text-gray-800 mb-1">Customer Details</h2>
       <p className="text-sm text-gray-400 mb-6">Enter customer info for the bill</p>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Name <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            Name <span className="text-xs text-gray-400 font-normal">(optional)</span>
+          </label>
           <div className="relative">
             <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input type="text" value={data.name} onChange={e => onChange({ name: e.target.value })}
-              placeholder="Customer name" className="input-field pl-9" required autoFocus />
+              placeholder="Walk-in customer" className="input-field pl-9" autoFocus />
           </div>
         </div>
         <div>
@@ -442,7 +444,7 @@ function BillingStep({ customer, cart, onCartChange, onComplete, onBack }) {
 
       {/* ── Header ── */}
       <div>
-        <h2 className="text-xl font-bold text-gray-800">Bill — {customer.name}</h2>
+        <h2 className="text-xl font-bold text-gray-800">Bill — {customer.name || 'Walk-in'}</h2>
         {customer.phone && <p className="text-sm text-gray-400">+91 {customer.phone}</p>}
       </div>
 
@@ -927,7 +929,7 @@ function ReceiptStep({ bill, customer, onNewBill }) {
         <div className="border-b border-dashed border-gray-300 pb-3 mb-3">
           <div>Bill No : {bill.billNumber}</div>
           <div>Date    : {new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-          <div>Customer: {customer.name}</div>
+          <div>Customer: {customer.name || 'Walk-in'}</div>
           {customer.phone && <div>Phone   : +91 {customer.phone}</div>}
         </div>
         <div className="border-b border-dashed border-gray-300 pb-3 mb-3 space-y-1">
