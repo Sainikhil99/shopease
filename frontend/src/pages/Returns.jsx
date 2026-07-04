@@ -1,15 +1,95 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Search, RotateCcw, Check, X, ChevronLeft, Package, AlertTriangle } from 'lucide-react';
+import { Search, RotateCcw, Check, X, ChevronLeft, Package, AlertTriangle, Printer } from 'lucide-react';
 
 const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
 const PAYMENT_EMOJI  = { cash: '💵', upi: '📲', phonepe: '🟣', googlepay: '🔵', card: '💳' };
 
 const REASONS = ['Customer not satisfied', 'Wrong size / colour', 'Defective / damaged', 'Duplicate purchase', 'Other'];
 
+function printReturnBill(ret, shop) {
+  const fmt = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+  const payLabel = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
+  const totalQty = ret.items.reduce((s, i) => s + (i.returnQty || i.qty || 0), 0);
+
+  const itemRows = ret.items.map(item => {
+    const qty   = item.returnQty || item.qty || 0;
+    const price = item.sellingPrice || 0;
+    return `<tr>
+      <td>${item.productName}</td>
+      <td style="text-align:center">${qty}</td>
+      <td style="text-align:right">₹${price.toLocaleString('en-IN')}</td>
+      <td style="text-align:right;font-weight:bold">₹${(qty * price).toLocaleString('en-IN')}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Return Bill — ${ret.returnNumber}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:24px;max-width:480px;margin:auto}
+    .print-btn{display:block;margin:0 0 16px auto;padding:8px 24px;background:#ea580c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold}
+    .shop-header{text-align:center;padding-bottom:10px;margin-bottom:14px;border-bottom:2px solid #ea580c}
+    .shop-header h1{font-size:18px;color:#ea580c;font-weight:800}
+    .shop-header p{color:#555;font-size:10px;margin-top:2px}
+    .badge{text-align:center;background:#fff7ed;border:2px solid #fed7aa;border-radius:8px;padding:8px 0;font-size:14px;font-weight:800;color:#c2410c;margin-bottom:14px;letter-spacing:1px}
+    .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+    .meta-box{background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px}
+    .meta-label{font-size:8px;color:#9a3412;text-transform:uppercase;letter-spacing:.5px}
+    .meta-value{font-size:11px;font-weight:bold;color:#111;margin-top:2px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    thead th{background:#ea580c;color:#fff;padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase}
+    tbody td{padding:6px 8px;border-bottom:1px solid #fef3c7;font-size:11px}
+    tbody tr:nth-child(even) td{background:#fff7ed}
+    .total-row{border-top:2px solid #ea580c;background:#fff7ed}
+    .total-row td{padding:8px;font-weight:bold;color:#c2410c;font-size:13px}
+    .refund-box{background:#ea580c;color:#fff;border-radius:12px;padding:14px;text-align:center;margin-bottom:12px}
+    .refund-box .label{font-size:10px;opacity:.85;margin-bottom:4px}
+    .refund-box .amount{font-size:28px;font-weight:900}
+    .footer{text-align:center;margin-top:18px;padding-top:10px;border-top:1px dashed #fed7aa;color:#9a3412;font-size:9px}
+    @media print{.print-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨️ Print Return Bill</button>
+  <div class="shop-header">
+    <h1>${shop?.shopName || 'ShopEase'}</h1>
+    <p>${shop?.address || ''} ${shop?.phone ? '· ' + shop.phone : ''} ${shop?.gstin ? '· GSTIN: ' + shop.gstin : ''}</p>
+  </div>
+  <div class="badge">↩ RETURN RECEIPT</div>
+  <div class="meta">
+    <div class="meta-box"><div class="meta-label">Return No.</div><div class="meta-value">${ret.returnNumber}</div></div>
+    <div class="meta-box"><div class="meta-label">Date &amp; Time</div><div class="meta-value">${fmt(ret.returnedAt || new Date())}</div></div>
+    <div class="meta-box"><div class="meta-label">Customer</div><div class="meta-value">${ret.customerName || 'Walk-in'}${ret.customerPhone ? ' · ' + ret.customerPhone : ''}</div></div>
+    <div class="meta-box"><div class="meta-label">Original Bill</div><div class="meta-value">${ret.originalBillNumber}</div></div>
+    ${ret.reason ? `<div class="meta-box" style="grid-column:1/-1"><div class="meta-label">Return Reason</div><div class="meta-value">${ret.reason}</div></div>` : ''}
+  </div>
+  <table>
+    <thead><tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${itemRows}
+      <tr class="total-row">
+        <td colspan="2">${totalQty} item${totalQty !== 1 ? 's' : ''} returned</td>
+        <td colspan="2" style="text-align:right">Refund: ₹${ret.refundAmount.toLocaleString('en-IN')}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="refund-box">
+    <div class="label">REFUND AMOUNT via ${payLabel[ret.paymentMode] || ret.paymentMode}</div>
+    <div class="amount">₹${ret.refundAmount.toLocaleString('en-IN')}</div>
+  </div>
+  <div class="footer">
+    <p>Thank you · Stock restored for returned items</p>
+    <p style="margin-top:4px">Generated by ShopEase · ${fmt(new Date().toISOString())}</p>
+  </div>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=520,height=700');
+  win.document.write(html);
+  win.document.close();
+}
+
 export default function Returns() {
-  const { bills, returns, addReturn } = useApp();
+  const { bills, returns, addReturn, shop } = useApp();
   const location = useLocation();
 
   const [query, setQuery]               = useState('');
@@ -108,6 +188,7 @@ export default function Returns() {
     });
     setDone(ret);
     setStep(4);
+    printReturnBill(ret, shop);
   };
 
   const reset = () => {
@@ -416,9 +497,16 @@ export default function Returns() {
             Stock has been restored for all returned items.
           </div>
 
-          <button onClick={reset} className="btn-primary w-full">
-            Process Another Return
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => printReturnBill(done, shop)}
+              className="flex-1 btn-secondary flex items-center justify-center gap-2">
+              <Printer size={16} /> Print Return Bill
+            </button>
+            <button onClick={reset} className="flex-1 btn-primary">
+              Process Another Return
+            </button>
+          </div>
         </div>
       )}
     </div>
