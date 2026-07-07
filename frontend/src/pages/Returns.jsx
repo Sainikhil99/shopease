@@ -126,8 +126,9 @@ export default function Returns() {
   const [returnItems, setReturnItems]   = useState({});   // key = productName
   const [reason, setReason]             = useState('');
   const [step, setStep]                 = useState(1);    // 1 search · 2 items · 3 confirm · 4 done
-  const [restoreStock, setRestoreStock] = useState(true);  // owner decides
-  const [done, setDone]                 = useState(null);
+  const [restoreStock, setRestoreStock]   = useState(true);
+  const [discardReason, setDiscardReason] = useState('');
+  const [done, setDone]                   = useState(null);
 
   // ── Step 1: filter bills ──────────────────────────────────────────────────
   const q = query.trim().toLowerCase();
@@ -209,6 +210,7 @@ export default function Returns() {
       refundAmount,
       reason,
       restoreStock,
+      discardReason: !restoreStock ? discardReason : '',
     });
     setDone(ret);
     setStep(4);
@@ -217,7 +219,7 @@ export default function Returns() {
 
   const reset = () => {
     setQuery(''); setSelectedBill(null); setReturnItems({});
-    setReason(''); setRestoreStock(true); setStep(1); setDone(null);
+    setReason(''); setRestoreStock(true); setDiscardReason(''); setStep(1); setDone(null);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -476,6 +478,22 @@ export default function Returns() {
                 ? 'Returned quantities will be added back to product inventory.'
                 : 'Items will not be added back — stock stays as-is.'}
             </p>
+
+            {/* Discard reason — only shown when owner picks "No" */}
+            {!restoreStock && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                  Reason for discarding <span className="text-gray-400 font-normal">(required)</span>
+                </label>
+                <input
+                  type="text"
+                  value={discardReason}
+                  onChange={e => setDiscardReason(e.target.value)}
+                  placeholder="e.g. Damaged, Expired, Cannot resell…"
+                  className="input-field text-sm"
+                />
+              </div>
+            )}
           </div>
 
           {/* Reason */}
@@ -504,7 +522,8 @@ export default function Returns() {
             </button>
             <button
               onClick={processReturn}
-              className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+              disabled={!restoreStock && !discardReason.trim()}
+              className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <RotateCcw size={17} /> Process Return — ₹{refundAmount.toLocaleString('en-IN')} Refund
             </button>

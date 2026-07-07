@@ -975,10 +975,23 @@ export default function Inventory() {
   ];
 
   const typeStyle = {
-    opening:  'bg-blue-100 text-blue-700',
-    purchase: 'bg-green-100 text-green-700',
-    sale:     'bg-red-100 text-red-600',
-    return:   'bg-orange-100 text-orange-700',
+    opening:           'bg-blue-100 text-blue-700',
+    purchase:          'bg-green-100 text-green-700',
+    sale:              'bg-red-100 text-red-600',
+    return:            'bg-orange-100 text-orange-700',
+    'return-discarded':'bg-gray-100 text-gray-500',
+  };
+  const typeLabel = {
+    opening:           'Opening',
+    purchase:          'Purchase',
+    sale:              'Sale',
+    return:            'Return',
+    'return-discarded':'Return (Discarded)',
+  };
+  const typeSign = (type) => {
+    if (type === 'sale') return '−';
+    if (type === 'return-discarded') return '×';
+    return '+';
   };
 
   return (
@@ -1142,9 +1155,9 @@ export default function Inventory() {
                             {periodMovements.map(e => (
                               <div key={e.id} className="flex items-center gap-4 text-xs">
                                 <span className="text-gray-500 w-32 shrink-0">{fmtDateTime(e.date)}</span>
-                                <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{e.type}</span>
-                                <span className={`font-black text-sm w-12 ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
-                                  {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{typeLabel[e.type] || e.type}</span>
+                                <span className={`font-black text-sm w-16 ${e.type === 'sale' ? 'text-red-600' : e.type === 'return-discarded' ? 'text-gray-400' : 'text-green-700'}`}>
+                                  {typeSign(e.type)}{e.qty}
                                 </span>
                                 <span className="text-gray-500">bal: <span className="font-bold text-gray-700">{e.balanceAfter}</span></span>
                                 {e.supplierName && <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">{e.supplierName}</span>}
@@ -1192,17 +1205,18 @@ export default function Inventory() {
               return (
                 <div key={e.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${
-                    e.type === 'sale' ? 'bg-red-100 text-red-600' :
-                    e.type === 'purchase' ? 'bg-green-100 text-green-700' :
-                    e.type === 'opening' ? 'bg-blue-100 text-blue-700' :
+                    e.type === 'sale'              ? 'bg-red-100 text-red-600' :
+                    e.type === 'purchase'          ? 'bg-green-100 text-green-700' :
+                    e.type === 'opening'           ? 'bg-blue-100 text-blue-700' :
+                    e.type === 'return-discarded'  ? 'bg-gray-100 text-gray-400' :
                     'bg-orange-100 text-orange-700'
                   }`}>
-                    {e.type === 'sale' ? '−' : '+'}
+                    {typeSign(e.type)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-800 text-sm">{product?.name || '—'}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{e.type}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${typeStyle[e.type] || 'bg-gray-100 text-gray-600'}`}>{typeLabel[e.type] || e.type}</span>
                       {e.supplierName && (
                         <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300">
                           {e.supplierName}
@@ -1233,8 +1247,8 @@ export default function Inventory() {
                       </button>
                     )}
                     <div className="text-right ml-1">
-                      <p className={`text-xl font-black ${e.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
-                        {e.type === 'sale' ? `−${e.qty}` : `+${e.qty}`}
+                      <p className={`text-xl font-black ${e.type === 'sale' ? 'text-red-600' : e.type === 'return-discarded' ? 'text-gray-400' : 'text-green-700'}`}>
+                        {typeSign(e.type)}{e.qty}
                       </p>
                       <p className="text-xs text-gray-400">bal: <span className="font-bold text-gray-600">{e.balanceAfter}</span></p>
                     </div>

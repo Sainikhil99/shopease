@@ -671,10 +671,11 @@ export function AppProvider({ children }) {
     };
     setReturns(prev => [newReturn, ...prev]);
 
-    // Restore stock only when the owner chose to add items back to inventory
+    // Update stock ledger based on owner's choice
     const stockRestore = {};
     const retLedger = [];
     if (returnData.restoreStock !== false) {
+      // YES — add items back to stock
       returnData.items.forEach(item => {
         if (item.productId) {
           const product = products.find(p => p.id === item.productId);
@@ -683,13 +684,29 @@ export function AppProvider({ children }) {
           retLedger.push({
             id: `sl${Date.now()}-ret-${item.productId}`, productId: item.productId, type: 'return',
             qty: item.returnQty, balanceAfter: newBal,
-            date: new Date().toISOString(), note: `Return from ${returnData.customerName}`,
+            date: new Date().toISOString(),
+            note: returnData.reason ? `Return from ${returnData.customerName} — ${returnData.reason}` : `Return from ${returnData.customerName}`,
             supplierName: '', billNumber: returnData.originalBillNumber || '', costPrice: 0,
           });
         }
       });
       if (Object.keys(stockRestore).length)
         setProducts(prev => prev.map(p => stockRestore[p.id] !== undefined ? { ...p, stockQty: stockRestore[p.id] } : p));
+      if (retLedger.length) setStockLedger(prev => [...prev, ...retLedger]);
+    } else {
+      // NO — record discarded return without changing stock
+      returnData.items.forEach(item => {
+        if (item.productId) {
+          const product = products.find(p => p.id === item.productId);
+          retLedger.push({
+            id: `sl${Date.now()}-disc-${item.productId}`, productId: item.productId, type: 'return-discarded',
+            qty: item.returnQty, balanceAfter: product?.stockQty || 0,
+            date: new Date().toISOString(),
+            note: returnData.discardReason || 'Discarded — not restocked',
+            supplierName: '', billNumber: returnData.originalBillNumber || '', costPrice: 0,
+          });
+        }
+      });
       if (retLedger.length) setStockLedger(prev => [...prev, ...retLedger]);
     }
     setBills(prev => prev.map(b =>

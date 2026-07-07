@@ -4,7 +4,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import {
   Plus, Edit2, Trash2, Search, X, AlertTriangle, Package,
   Check, History, TrendingUp, TrendingDown, ArrowUpCircle,
-  ArrowDownCircle, RefreshCw, ChevronDown, ChevronUp,
+  ArrowDownCircle, RefreshCw, ChevronDown, ChevronUp, PackageX,
 } from 'lucide-react';
 
 const CATEGORIES = ['clothing', 'footwear', 'grocery', 'electronics', 'other'];
@@ -179,16 +179,18 @@ function StockHistoryModal({ product, ledger, onClose }) {
     .filter(e => e.productId === product.id)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const totalPurchased = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
-  const totalReturned  = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
-  const totalOut       = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+  const totalPurchased  = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
+  const totalReturned   = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
+  const totalDiscarded  = entries.filter(e => e.type === 'return-discarded').reduce((s, e) => s + e.qty, 0);
+  const totalOut        = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
   const openingEntry   = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
   const typeConfig = {
-    opening:  { label: 'Opening Stock', icon: Package,        color: 'text-blue-700',  bg: 'bg-blue-50',   border: 'border-blue-200',   sign: '+' },
-    purchase: { label: 'Purchase',      icon: ArrowUpCircle,  color: 'text-green-700', bg: 'bg-green-50',  border: 'border-green-200',  sign: '+' },
-    sale:     { label: 'Sale',          icon: ArrowDownCircle,color: 'text-red-600',   bg: 'bg-red-50',    border: 'border-red-200',    sign: '−' },
-    return:   { label: 'Return',        icon: RefreshCw,       color: 'text-orange-700',bg: 'bg-orange-50', border: 'border-orange-200', sign: '+' },
+    opening:            { label: 'Opening Stock',      icon: Package,        color: 'text-blue-700',  bg: 'bg-blue-50',   border: 'border-blue-200',   sign: '+' },
+    purchase:           { label: 'Purchase',           icon: ArrowUpCircle,  color: 'text-green-700', bg: 'bg-green-50',  border: 'border-green-200',  sign: '+' },
+    sale:               { label: 'Sale',               icon: ArrowDownCircle,color: 'text-red-600',   bg: 'bg-red-50',    border: 'border-red-200',    sign: '−' },
+    return:             { label: 'Return',             icon: RefreshCw,      color: 'text-orange-700',bg: 'bg-orange-50', border: 'border-orange-200', sign: '+' },
+    'return-discarded': { label: 'Return (Discarded)', icon: PackageX,       color: 'text-gray-500',  bg: 'bg-gray-50',   border: 'border-gray-200',   sign: '×' },
   };
 
   const fmt = (d) => {
@@ -210,7 +212,7 @@ function StockHistoryModal({ product, ledger, onClose }) {
         </div>
 
         {/* Summary cards */}
-        <div className={`grid gap-3 p-5 shrink-0 ${totalReturned > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <div className={`grid gap-3 p-5 shrink-0 ${(totalReturned > 0 || totalDiscarded > 0) ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
             <p className="text-xs text-blue-500 font-semibold mb-1">Opening Stock</p>
             <p className="text-2xl font-black text-blue-700">{openingEntry?.qty ?? '—'}</p>
@@ -228,9 +230,16 @@ function StockHistoryModal({ product, ledger, onClose }) {
           </div>
           {totalReturned > 0 && (
             <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-100 col-span-1">
-              <p className="text-xs text-orange-600 font-semibold mb-1">Customer Returns</p>
+              <p className="text-xs text-orange-600 font-semibold mb-1">Returns (Restocked)</p>
               <p className="text-2xl font-black text-orange-600">+{totalReturned}</p>
-              <p className="text-xs text-orange-400 mt-0.5">returned by customers</p>
+              <p className="text-xs text-orange-400 mt-0.5">added back</p>
+            </div>
+          )}
+          {totalDiscarded > 0 && totalReturned === 0 && (
+            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-200 col-span-1">
+              <p className="text-xs text-gray-500 font-semibold mb-1">Returns (Discarded)</p>
+              <p className="text-2xl font-black text-gray-500">×{totalDiscarded}</p>
+              <p className="text-xs text-gray-400 mt-0.5">not restocked</p>
             </div>
           )}
           <div className={`rounded-xl p-3 text-center border ${product.stockQty === 0 ? 'bg-red-50 border-red-200' : product.stockQty <= product.minStockAlert ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
