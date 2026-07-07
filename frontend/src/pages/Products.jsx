@@ -271,8 +271,14 @@ function StockHistoryModal({ product, ledger, onClose }) {
                       <Icon size={16} className={cfg.color} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                        {entry.type === 'return' && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">✓ Restocked</span>
+                        )}
+                        {entry.type === 'return-discarded' && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">✗ Not Restocked</span>
+                        )}
                         {entry.supplierName && <span className="text-xs text-gray-500">· {entry.supplierName}</span>}
                         {entry.billNumber && entry.billNumber !== 'Multiple' && (
                           <span className="text-xs text-gray-400">· {entry.billNumber}</span>
@@ -284,7 +290,7 @@ function StockHistoryModal({ product, ledger, onClose }) {
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`text-lg font-black ${entry.type === 'sale' ? 'text-red-600' : 'text-green-700'}`}>
+                      <p className={`text-lg font-black ${cfg.color}`}>
                         {cfg.sign}{entry.qty}
                       </p>
                       <p className="text-xs text-gray-400">bal: <span className="font-bold text-gray-700">{entry.balanceAfter}</span></p>

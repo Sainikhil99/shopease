@@ -110,6 +110,59 @@ function printReturnBill(ret, shop) {
   popup.document.close();
 }
 
+function ReturnHistory({ returns }) {
+  const sorted = [...returns].sort((a, b) => new Date(b.returnedAt) - new Date(a.returnedAt));
+  if (sorted.length === 0) return null;
+  return (
+    <div className="mt-8">
+      <h3 className="text-base font-bold text-gray-800 mb-3">Past Returns</h3>
+      <div className="card overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                {['Return #', 'Bill #', 'Customer', 'Items', 'Refund', 'Restocked?', 'Date'].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(r => (
+                <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-semibold text-gray-800 text-xs">{r.returnNumber || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-blue-600">{r.originalBillNumber || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-600">{r.customerName || 'Walk-in'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-600">{r.items?.length || 0} item{r.items?.length !== 1 ? 's' : ''}</td>
+                  <td className="px-4 py-3 text-xs font-bold text-orange-600">₹{(r.refundAmount || 0).toLocaleString('en-IN')}</td>
+                  <td className="px-4 py-3">
+                    {r.restoreStock !== false ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        ✓ Yes
+                      </span>
+                    ) : (
+                      <div>
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          ✗ No
+                        </span>
+                        {r.discardReason && (
+                          <p className="text-xs text-gray-400 mt-0.5">{r.discardReason}</p>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-400">
+                    {new Date(r.returnedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Returns() {
   const { bills, returns, addReturn, shop } = useApp();
   const location = useLocation();
@@ -224,7 +277,7 @@ export default function Returns() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="max-w-2xl mx-auto">
 
       {/* Header */}
       <div className="mb-6">
@@ -530,6 +583,9 @@ export default function Returns() {
           </div>
         </div>
       )}
+
+      {/* Past Returns History — always visible below the flow */}
+      {step === 1 && <ReturnHistory returns={returns} />}
 
       {/* ── STEP 4: Done ── */}
       {step === 4 && done && (

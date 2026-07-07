@@ -683,12 +683,13 @@ export default function Inventory() {
   // Per-product stats for the period
   const productStats = useMemo(() => products.map(p => {
     const entries   = stockLedger.filter(e => e.productId === p.id && inRange(e.date, range));
-    const purchasedQty = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
-    const returnedQty  = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
-    const addedQty     = purchasedQty + returnedQty; // total stock-in (for openingQty math)
-    const soldQty      = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
-    const openingQty   = Math.max(0, p.stockQty - addedQty + soldQty);
-    return { ...p, openingQty, purchasedQty, returnedQty, addedQty, soldQty, closingQty: p.stockQty };
+    const purchasedQty  = entries.filter(e => e.type === 'purchase' || e.type === 'opening').reduce((s, e) => s + e.qty, 0);
+    const returnedQty   = entries.filter(e => e.type === 'return').reduce((s, e) => s + e.qty, 0);
+    const discardedQty  = entries.filter(e => e.type === 'return-discarded').reduce((s, e) => s + e.qty, 0);
+    const addedQty      = purchasedQty + returnedQty;
+    const soldQty       = entries.filter(e => e.type === 'sale').reduce((s, e) => s + e.qty, 0);
+    const openingQty    = Math.max(0, p.stockQty - addedQty + soldQty);
+    return { ...p, openingQty, purchasedQty, returnedQty, discardedQty, addedQty, soldQty, closingQty: p.stockQty };
   }), [products, stockLedger, range]);
 
   // Summary cards
@@ -1084,7 +1085,7 @@ export default function Inventory() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {['Product', 'Category', 'Opening Stock', 'Added (+)', 'Sold (−)', 'Current Stock', 'Stock Value', ''].map(h => (
+                {['Product', 'Category', 'Opening Stock', 'Purchased (+)', 'Returns', 'Sold (−)', 'Current Stock', 'Stock Value', ''].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{h}</th>
                 ))}
               </tr>
@@ -1111,8 +1112,23 @@ export default function Inventory() {
                         +{p.purchasedQty}
                       </span>
                       <span className="text-xs text-gray-400 ml-1">pcs</span>
-                      {p.returnedQty > 0 && (
-                        <div className="text-xs text-orange-500 font-medium mt-0.5">+{p.returnedQty} return</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.returnedQty === 0 && p.discardedQty === 0 ? (
+                        <span className="text-gray-300 text-sm">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          {p.returnedQty > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 w-fit">
+                              Yes +{p.returnedQty}
+                            </span>
+                          )}
+                          {p.discardedQty > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 w-fit">
+                              No ×{p.discardedQty}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -1144,7 +1160,7 @@ export default function Inventory() {
 
                   isExp && (
                     <tr key={`${p.id}-detail`} className="bg-gray-50 border-b border-gray-100">
-                      <td colSpan={8} className="px-6 py-4">
+                      <td colSpan={9} className="px-6 py-4">
                         {periodMovements.length === 0 ? (
                           <p className="text-sm text-gray-400 text-center py-2">No stock movements in this period</p>
                         ) : (
