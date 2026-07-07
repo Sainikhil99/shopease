@@ -17,6 +17,22 @@ body {
   min-height: 100vh;
 }
 
+/* ── Sidebar slide-in (mobile hamburger) ─────────────────────────────────── */
+.sidebar-panel {
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+}
+.sidebar-panel.sidebar-open {
+  transform: translateX(0);
+}
+@media (min-width: 1024px) {
+  /* On desktop the sidebar is always in the document flow — no transform */
+  .sidebar-panel {
+    transform: none;
+    transition: none;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;

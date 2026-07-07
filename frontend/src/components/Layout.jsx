@@ -51,25 +51,47 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Mobile overlay */}
+
+      {/* Dark overlay — tap anywhere outside sidebar to close it (mobile only) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.50)',
+            zIndex: 20,
+          }}
+        />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      {/*
+        Sidebar — always visible on desktop (lg+).
+        On mobile it slides in from the left using the .sidebar-panel CSS class.
+        .sidebar-open is added when the hamburger is pressed.
+      */}
+      <aside
+        className={`sidebar-panel fixed lg:static inset-y-0 left-0 z-30 w-64 flex flex-col bg-white border-r border-gray-200${sidebarOpen ? ' sidebar-open' : ''}`}
+      >
+        {/* Header */}
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold text-blue-600">ShopEase</h1>
               <p className="text-xs text-gray-500 mt-0.5 truncate max-w-[160px]">{shop?.shopName}</p>
             </div>
-            <button className="lg:hidden text-gray-400" onClick={() => setSidebarOpen(false)}>
+            {/* Close button — mobile only */}
+            <button
+              className="lg:hidden p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              onClick={() => setSidebarOpen(false)}
+              style={{ cursor: 'pointer' }}
+            >
               <X size={20} />
             </button>
           </div>
         </div>
 
+        {/* Nav links */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
@@ -77,7 +99,7 @@ export default function Layout({ children }) {
               to={to}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                   isActive
                     ? 'bg-blue-50 text-blue-700'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -95,15 +117,19 @@ export default function Layout({ children }) {
           ))}
         </nav>
 
+        {/* Low stock warning */}
         {lowStockProducts.length > 0 && (
           <div className="mx-4 mb-3 p-3 bg-red-50 rounded-lg border border-red-100">
             <div className="flex items-center gap-2 text-red-700">
               <AlertTriangle size={14} />
-              <span className="text-xs font-semibold">{lowStockProducts.length} low stock item{lowStockProducts.length > 1 ? 's' : ''}</span>
+              <span className="text-xs font-semibold">
+                {lowStockProducts.length} low stock item{lowStockProducts.length > 1 ? 's' : ''}
+              </span>
             </div>
           </div>
         )}
 
+        {/* User footer */}
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm">
@@ -114,21 +140,36 @@ export default function Layout({ children }) {
               <p className="text-xs text-gray-500 truncate">{shop?.phone}</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700 font-medium"
+            style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+          >
             <LogOut size={16} /> Logout
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <OfflineBanner />
-        {/* Top bar (mobile) */}
+
+        {/* Mobile top bar with hamburger */}
         <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(true)} className="text-gray-500">
-            <Menu size={22} />
+          <button
+            onClick={() => setSidebarOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 40, height: 40, borderRadius: 8,
+              border: '1px solid #e5e7eb',
+              background: '#fff', cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            aria-label="Open menu"
+          >
+            <Menu size={22} color="#374151" />
           </button>
-          <span className="font-bold text-blue-600">ShopEase</span>
+          <span className="font-bold text-blue-600 text-lg">ShopEase</span>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
