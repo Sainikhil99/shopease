@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Search, RotateCcw, Check, X, ChevronLeft, Package, AlertTriangle, Printer } from 'lucide-react';
+import { Search, RotateCcw, Check, X, ChevronLeft, Package, AlertTriangle, Printer, PackagePlus, PackageX } from 'lucide-react';
 
 const PAYMENT_LABELS = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
 const PAYMENT_EMOJI  = { cash: '💵', upi: '📲', phonepe: '🟣', googlepay: '🔵', card: '💳' };
@@ -94,7 +94,7 @@ function printReturnBill(ret, shop) {
 
   <hr class="divider">
   <div class="footer">
-    <p>Stock restored for returned items.</p>
+    <p>${ret.restoreStock !== false ? 'Stock restored for returned items.' : 'Items not returned to stock.'}</p>
     <p style="margin-top:2px">Thank you! Visit again.</p>
     <p style="margin-top:4px">Powered by ShopEase</p>
   </div>
@@ -126,6 +126,7 @@ export default function Returns() {
   const [returnItems, setReturnItems]   = useState({});   // key = productName
   const [reason, setReason]             = useState('');
   const [step, setStep]                 = useState(1);    // 1 search · 2 items · 3 confirm · 4 done
+  const [restoreStock, setRestoreStock] = useState(true);  // owner decides
   const [done, setDone]                 = useState(null);
 
   // ── Step 1: filter bills ──────────────────────────────────────────────────
@@ -207,6 +208,7 @@ export default function Returns() {
       items:              selected,
       refundAmount,
       reason,
+      restoreStock,
     });
     setDone(ret);
     setStep(4);
@@ -215,7 +217,7 @@ export default function Returns() {
 
   const reset = () => {
     setQuery(''); setSelectedBill(null); setReturnItems({});
-    setReason(''); setStep(1); setDone(null);
+    setReason(''); setRestoreStock(true); setStep(1); setDone(null);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -437,10 +439,43 @@ export default function Returns() {
               <div>
                 <p className="text-orange-200 text-xs mt-2">Return via</p>
                 <p className="text-white font-bold text-lg">{PAYMENT_EMOJI[selectedBill.paymentMode]} {PAYMENT_LABELS[selectedBill.paymentMode]}</p>
-                <p className="text-orange-200 text-xs mt-1">Stock will be restored automatically</p>
               </div>
               <div className="text-5xl font-black">₹{refundAmount.toLocaleString('en-IN')}</div>
             </div>
+          </div>
+
+          {/* Stock restore toggle */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Add items back to stock?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRestoreStock(true)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                  restoreStock
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                <PackagePlus size={16} />
+                Yes, restore stock
+              </button>
+              <button
+                onClick={() => setRestoreStock(false)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                  !restoreStock
+                    ? 'border-red-400 bg-red-50 text-red-600'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                <PackageX size={16} />
+                No, discard items
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {restoreStock
+                ? 'Returned quantities will be added back to product inventory.'
+                : 'Items will not be added back — stock stays as-is.'}
+            </p>
           </div>
 
           {/* Reason */}
@@ -515,9 +550,15 @@ export default function Returns() {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-6 text-sm text-blue-700">
-            Stock has been restored for all returned items.
-          </div>
+          {done.restoreStock !== false ? (
+            <div className="bg-green-50 border border-green-100 rounded-xl p-3 mb-6 text-sm text-green-700 flex items-center gap-2">
+              <PackagePlus size={15} /> Stock has been restored for all returned items.
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-6 text-sm text-gray-500 flex items-center gap-2">
+              <PackageX size={15} /> Items were not added back to stock.
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button

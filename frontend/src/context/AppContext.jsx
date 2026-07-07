@@ -671,25 +671,27 @@ export function AppProvider({ children }) {
     };
     setReturns(prev => [newReturn, ...prev]);
 
-    // Restore stock — batch update to avoid stale closure issues
+    // Restore stock only when the owner chose to add items back to inventory
     const stockRestore = {};
     const retLedger = [];
-    returnData.items.forEach(item => {
-      if (item.productId) {
-        const product = products.find(p => p.id === item.productId);
-        const newBal = (product?.stockQty || 0) + item.returnQty;
-        stockRestore[item.productId] = newBal;
-        retLedger.push({
-          id: `sl${Date.now()}-ret-${item.productId}`, productId: item.productId, type: 'return',
-          qty: item.returnQty, balanceAfter: newBal,
-          date: new Date().toISOString(), note: `Return from ${returnData.customerName}`,
-          supplierName: '', billNumber: returnData.originalBillNumber || '', costPrice: 0,
-        });
-      }
-    });
-    if (Object.keys(stockRestore).length)
-      setProducts(prev => prev.map(p => stockRestore[p.id] !== undefined ? { ...p, stockQty: stockRestore[p.id] } : p));
-    if (retLedger.length) setStockLedger(prev => [...prev, ...retLedger]);
+    if (returnData.restoreStock !== false) {
+      returnData.items.forEach(item => {
+        if (item.productId) {
+          const product = products.find(p => p.id === item.productId);
+          const newBal = (product?.stockQty || 0) + item.returnQty;
+          stockRestore[item.productId] = newBal;
+          retLedger.push({
+            id: `sl${Date.now()}-ret-${item.productId}`, productId: item.productId, type: 'return',
+            qty: item.returnQty, balanceAfter: newBal,
+            date: new Date().toISOString(), note: `Return from ${returnData.customerName}`,
+            supplierName: '', billNumber: returnData.originalBillNumber || '', costPrice: 0,
+          });
+        }
+      });
+      if (Object.keys(stockRestore).length)
+        setProducts(prev => prev.map(p => stockRestore[p.id] !== undefined ? { ...p, stockQty: stockRestore[p.id] } : p));
+      if (retLedger.length) setStockLedger(prev => [...prev, ...retLedger]);
+    }
     setBills(prev => prev.map(b =>
       b.id === returnData.originalBillId
         ? { ...b, hasReturn: true, returnedAmount: (b.returnedAmount || 0) + returnData.refundAmount }
