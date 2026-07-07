@@ -472,10 +472,42 @@ function ForgotPassword({ onBack }) {
 }
 
 // ─── Main Login page ──────────────────────────────────────────────────────────
+// ── Feature bullets shown on the left brand panel ──────────────────────────
+const FEATURES = [
+  { icon: '⚡', title: 'Instant billing', body: 'Generate GST-ready bills in seconds, even offline.' },
+  { icon: '📦', title: 'Smart inventory', body: 'Auto stock deduction with low-stock alerts.' },
+  { icon: '📊', title: 'Daily reports', body: 'Revenue, profit & expense summaries at a glance.' },
+];
+
 export default function Login() {
   const { loginAsShop } = useApp();
   const navigate = useNavigate();
-  const [mode, setMode] = useState('otp'); // 'otp' | 'email' | 'forgot'
+  const [mode, setMode] = useState('otp');
+
+  // 3-D tilt refs for the login card
+  const cardRef  = useRef(null);
+  const frameRef = useRef(null);
+
+  const handleTiltMove = (e) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width  - 0.5;
+    const y = (e.clientY - rect.top)  / rect.height - 0.5;
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => {
+      if (cardRef.current)
+        cardRef.current.style.transform =
+          `perspective(900px) rotateY(${x * 7}deg) rotateX(${-y * 7}deg) translateZ(6px)`;
+    });
+  };
+
+  const handleTiltLeave = () => {
+    if (cardRef.current) {
+      cardRef.current.style.transition = 'transform 0.55s cubic-bezier(0.23,1,0.32,1)';
+      cardRef.current.style.transform  = 'perspective(900px) rotateY(0deg) rotateX(0deg) translateZ(0)';
+      setTimeout(() => { if (cardRef.current) cardRef.current.style.transition = 'none'; }, 560);
+    }
+  };
 
   const handleLoginSuccess = (shop, token) => {
     loginAsShop(shop, token);
@@ -483,53 +515,171 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
-            <ShoppingBag className="text-blue-600" size={32} />
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#f7f8fa' }}>
+
+      {/* ── Left: Navy brand panel (hidden on small screens) ─────────────── */}
+      <div
+        className="hidden lg:flex"
+        style={{
+          width: 420,
+          flexShrink: 0,
+          background: 'linear-gradient(160deg, #0d1524 0%, #0b1220 100%)',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '48px 44px',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* subtle grid texture */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.04,
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Top: logo */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 48 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 11,
+              background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: 17, color: '#fff', letterSpacing: '-0.5px',
+            }}>S</div>
+            <span style={{ fontWeight: 800, fontSize: 18, color: '#fff', letterSpacing: '-0.4px' }}>ShopEase</span>
           </div>
-          <h1 className="text-3xl font-bold text-white">ShopEase</h1>
-          <p className="text-blue-100 mt-1">Billing & POS for Indian Shop Owners</p>
+
+          <div style={{ marginBottom: 48 }}>
+            <h2 style={{
+              fontSize: 30, fontWeight: 800, color: '#fff',
+              letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 12,
+            }}>
+              Built for Indian<br />retail shops
+            </h2>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.52)', lineHeight: 1.7, maxWidth: 280 }}>
+              From kirana to fashion — fast billing, smart stock, and daily reports in one place.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {FEATURES.map(f => (
+              <div key={f.title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+                  background: 'rgba(22,163,74,0.14)',
+                  border: '1px solid rgba(22,163,74,0.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16,
+                }}>{f.icon}</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '-0.1px', marginBottom: 2 }}>{f.title}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>{f.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {mode !== 'forgot' && (
-            <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
-              <button onClick={() => setMode('otp')}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'otp' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>
-                <Phone size={14} className="inline mr-1.5" />Phone + OTP
-              </button>
-              <button onClick={() => setMode('email')}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'email' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>
-                <Mail size={14} className="inline mr-1.5" />Email
-              </button>
-            </div>
-          )}
-
-          {mode === 'otp' && <PhoneOtpLogin onSuccess={handleLoginSuccess} />}
-          {mode === 'email' && <EmailLogin onSuccess={handleLoginSuccess} onForgotPassword={() => setMode('forgot')} />}
-          {mode === 'forgot' && <ForgotPassword onBack={() => setMode('email')} />}
-
-          {mode !== 'forgot' && (
-            <div className="mt-6 pt-5 border-t border-gray-100 text-center space-y-2">
-              <p className="text-sm text-gray-600">
-                New shop owner?{' '}
-                <Link to="/register" className="text-blue-600 font-medium hover:underline">Create account</Link>
-              </p>
-              <p className="text-xs text-gray-400">Session stays active for 8 hours</p>
-            </div>
-          )}
+        {/* Bottom: tagline */}
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 32 }}>
+          Trusted by kirana, fashion &amp; general stores across India
         </div>
+      </div>
 
-        {/* Admin quick-access */}
-        <div className="mt-4 text-center">
-          <Link
-            to="/admin"
-            className="inline-flex items-center gap-1.5 text-xs text-blue-200 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10"
+      {/* ── Right: login form ─────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', overflowY: 'auto' }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+
+          {/* Mobile logo */}
+          <div className="flex lg:hidden items-center gap-2 justify-center mb-8">
+            <div style={{
+              width: 34, height: 34, borderRadius: 9,
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: 15, color: '#fff',
+            }}>S</div>
+            <span style={{ fontWeight: 800, fontSize: 18, color: '#12161f', letterSpacing: '-0.4px' }}>ShopEase</span>
+          </div>
+
+          {/* Tilt card */}
+          <div
+            ref={cardRef}
+            onMouseMove={handleTiltMove}
+            onMouseLeave={handleTiltLeave}
+            style={{
+              background: '#fff',
+              border: '1px solid #e7e9ee',
+              borderRadius: 16,
+              padding: '32px 32px 28px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
+              transformStyle: 'preserve-3d',
+              willChange: 'transform',
+            }}
           >
-            <Lock size={11} /> Admin Login
-          </Link>
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: '#12161f', letterSpacing: '-0.4px', marginBottom: 4 }}>
+                Welcome back
+              </h1>
+              <p style={{ fontSize: 13, color: '#8a93a3' }}>Sign in to your ShopEase account</p>
+            </div>
+
+            {mode !== 'forgot' && (
+              <div style={{
+                display: 'flex', background: '#f1f3f7', borderRadius: 10, padding: 4, marginBottom: 24, gap: 4,
+              }}>
+                {[
+                  { key: 'otp',   Icon: Phone, label: 'Phone + OTP' },
+                  { key: 'email', Icon: Mail,  label: 'Email' },
+                ].map(({ key, Icon, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setMode(key)}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '8px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                      fontSize: 13, fontWeight: 600,
+                      background: mode === key ? '#fff' : 'transparent',
+                      color: mode === key ? '#16a34a' : '#8a93a3',
+                      boxShadow: mode === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Icon size={13} /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {mode === 'otp'    && <PhoneOtpLogin onSuccess={handleLoginSuccess} />}
+            {mode === 'email'  && <EmailLogin onSuccess={handleLoginSuccess} onForgotPassword={() => setMode('forgot')} />}
+            {mode === 'forgot' && <ForgotPassword onBack={() => setMode('email')} />}
+
+            {mode !== 'forgot' && (
+              <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #f1f3f7', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: '#8a93a3', marginBottom: 6 }}>
+                  New shop owner?{' '}
+                  <Link to="/register" style={{ color: '#16a34a', fontWeight: 600, textDecoration: 'none' }}>
+                    Create account
+                  </Link>
+                </p>
+                <p style={{ fontSize: 11, color: '#a7afbe' }}>Session active for 30 days</p>
+              </div>
+            )}
+          </div>
+
+          {/* Admin link */}
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <Link
+              to="/admin"
+              style={{ fontSize: 11, color: '#a7afbe', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onMouseEnter={e => e.currentTarget.style.color = '#454d5e'}
+              onMouseLeave={e => e.currentTarget.style.color = '#a7afbe'}
+            >
+              <Lock size={10} /> Admin access
+            </Link>
+          </div>
         </div>
       </div>
     </div>
