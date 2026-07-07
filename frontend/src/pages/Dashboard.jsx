@@ -3,285 +3,220 @@ import { useApp } from '../context/AppContext';
 import {
   TrendingUp, ShoppingCart, IndianRupee, Package,
   AlertTriangle, Plus, History, BarChart2, Tag, ArrowRight,
-  RotateCcw, Wallet,
+  RotateCcw, Wallet
 } from 'lucide-react';
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, iconBg, iconFg, icon: Icon, onClick }) {
+function StatCard({ icon: Icon, label, value, color, sub, onClick }) {
   return (
-    <div
-      className="stat-card"
-      style={{ cursor: onClick ? 'pointer' : 'default' }}
-      onClick={onClick}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t3)', letterSpacing: '0.1px' }}>{label}</span>
-        <div style={{
-          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-          background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Icon size={17} style={{ color: iconFg }} />
+    <div className={`stat-card ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`} onClick={onClick}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-500 font-medium">{label}</span>
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
+          <Icon size={18} className="text-white" />
         </div>
       </div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.4px', lineHeight: 1 }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 11, color: 'var(--t4)', marginTop: 5 }}>{sub}</div>
-      )}
+      <div className="text-2xl font-bold text-gray-900 mt-2">{value}</div>
+      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
     </div>
   );
 }
 
-// ── Payment mode pill ─────────────────────────────────────────────────────────
-const PAY_STYLE = {
-  cash:      { bg: '#f0fdf4', color: '#15803d' },
-  upi:       { bg: '#eff6ff', color: '#2563eb' },
-  phonepe:   { bg: '#f5f3ff', color: '#7c3aed' },
-  googlepay: { bg: '#fff7ed', color: '#ea580c' },
-  card:      { bg: '#f9fafb', color: '#374151' },
-};
-const PAY_LABEL = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'GPay', card: 'Card' };
-
 export default function Dashboard() {
   const {
     shop, todaysSales, todaysProfit, todaysBills, lowStockProducts, products,
-    todaysExpenseTotal,
+    todaysExpenseTotal, todaysExpenses,
   } = useApp();
   const navigate = useNavigate();
 
-  const netProfit       = todaysProfit - todaysExpenseTotal;
-  const hasLowStock     = lowStockProducts.length > 0;
-  const activeProducts  = products.filter(p => p.isActive).length;
-
-  const payBreakdown = todaysBills.reduce((acc, b) => {
+  const paymentBreakdown = todaysBills.reduce((acc, b) => {
     acc[b.paymentMode] = (acc[b.paymentMode] || 0) + b.total;
     return acc;
   }, {});
 
-  const QUICK = [
-    { icon: Plus,      label: 'New Bill',      sub: 'Start billing',       to: '/new-bill',      iconBg: '#f0fdf4', iconFg: '#16a34a' },
-    { icon: Package,   label: 'Products',      sub: 'Manage catalogue',    to: '/products',      iconBg: '#eff6ff', iconFg: '#2563eb' },
-    { icon: History,   label: 'Sales History', sub: 'View past bills',     to: '/sales-history', iconBg: '#f5f3ff', iconFg: '#7c3aed' },
-    { icon: RotateCcw, label: 'Returns',       sub: 'Process refunds',     to: '/returns',       iconBg: '#fff7ed', iconFg: '#ea580c' },
-    { icon: Wallet,    label: 'Expenses',      sub: 'Track daily costs',   to: '/expenses',      iconBg: '#fef2f2', iconFg: '#dc2626' },
-    { icon: BarChart2, label: 'Reports',       sub: 'Analytics',           to: '/reports',       iconBg: '#eef2ff', iconFg: '#4f46e5' },
-    { icon: Tag,       label: 'Coupons',       sub: 'Manage offers',       to: '/coupons',       iconBg: '#fdf2f8', iconFg: '#db2777' },
-  ];
+  const paymentLabels = { cash: 'Cash', upi: 'UPI', phonepe: 'PhonePe', googlepay: 'Google Pay', card: 'Card' };
+
+  const netProfit = todaysProfit - todaysExpenseTotal;
+  const hasLowStock = lowStockProducts.length > 0;
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.4px', marginBottom: 3 }}>
-            {shop?.shopName || 'Dashboard'}
-          </h2>
-          <p style={{ fontSize: 13, color: 'var(--t3)' }}>
+          <h2 className="text-2xl font-bold text-gray-900">{shop?.shopName || 'Dashboard'}</h2>
+          <p className="text-gray-500 text-sm mt-0.5">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <button onClick={() => navigate('/new-bill')} className="btn-primary">
-          <Plus size={16} /> New Bill
+        <button onClick={() => navigate('/new-bill')} className="btn-primary flex items-center gap-2">
+          <Plus size={18} /> New Bill
         </button>
       </div>
 
-      {/* ── Stat grid ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 20 }}
-           className="lg:grid-cols-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
+          icon={IndianRupee}
           label="Today's Revenue"
           value={`₹${Math.round(todaysSales).toLocaleString('en-IN')}`}
-          sub="Gross sales today"
-          icon={IndianRupee}
-          iconBg="#f0fdf4" iconFg="#16a34a"
+          color="bg-blue-500"
+          sub="Excl. GST collected"
         />
         <StatCard
+          icon={TrendingUp}
           label={todaysExpenseTotal > 0 ? 'Net Profit' : "Today's Profit"}
           value={`₹${Math.round(netProfit).toLocaleString('en-IN')}`}
+          color={netProfit < 0 ? 'bg-red-500' : 'bg-green-500'}
           sub={todaysExpenseTotal > 0 ? `After ₹${Math.round(todaysExpenseTotal).toLocaleString('en-IN')} expenses` : 'Estimated gross'}
-          icon={TrendingUp}
-          iconBg={netProfit < 0 ? '#fef2f2' : '#f0fdf4'}
-          iconFg={netProfit < 0 ? '#dc2626' : '#16a34a'}
         />
         <StatCard
+          icon={ShoppingCart}
           label="Bills Today"
           value={todaysBills.length}
+          color="bg-purple-500"
           sub="Transactions"
-          icon={ShoppingCart}
-          iconBg="#f5f3ff" iconFg="#7c3aed"
         />
         <StatCard
-          label="Active Products"
-          value={activeProducts}
-          sub={hasLowStock ? `${lowStockProducts.length} need restocking` : 'All stocked'}
           icon={Package}
-          iconBg={hasLowStock ? '#fef2f2' : '#fff7ed'}
-          iconFg={hasLowStock ? '#dc2626' : '#ea580c'}
+          label="Total Products"
+          value={products.filter(p => p.isActive).length}
+          color={hasLowStock ? 'bg-red-500' : 'bg-orange-500'}
+          sub={hasLowStock ? `${lowStockProducts.length} need restocking` : 'All stocked'}
           onClick={hasLowStock ? () => document.getElementById('low-stock-section')?.scrollIntoView({ behavior: 'smooth' }) : undefined}
         />
       </div>
 
-      {/* ── Main columns ───────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }} className="lg:grid-cols-3">
-
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Quick Actions */}
         <div className="card">
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.2px', marginBottom: 14 }}>
-            Quick Actions
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {QUICK.map(({ icon: Icon, label, sub, to, iconBg, iconFg }) => (
-              <button
-                key={to}
-                onClick={() => navigate(to)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px',
-                  borderRadius: 9, border: 'none', background: 'transparent', cursor: 'pointer',
-                  textAlign: 'left', width: '100%',
-                  transition: 'background 0.13s ease',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--border-sub, #f7f8fa)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                  background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Icon size={15} style={{ color: iconFg }} />
+          <h3 className="font-semibold text-gray-800 mb-4">Quick Actions</h3>
+          <div className="space-y-1">
+            {[
+              { icon: Plus,      label: 'New Bill',      sub: 'Start billing a customer',   to: '/new-bill',      color: 'text-blue-600 bg-blue-50' },
+              { icon: Package,   label: 'Products',      sub: 'Manage your catalogue',       to: '/products',      color: 'text-green-600 bg-green-50' },
+              { icon: History,   label: 'Sales History', sub: 'View past bills',             to: '/sales-history', color: 'text-purple-600 bg-purple-50' },
+              { icon: RotateCcw, label: 'Returns',       sub: 'Process refunds',             to: '/returns',       color: 'text-orange-600 bg-orange-50' },
+              { icon: Wallet,    label: 'Expenses',      sub: 'Track daily costs',           to: '/expenses',      color: 'text-red-600 bg-red-50' },
+              { icon: BarChart2, label: 'Reports',       sub: 'View analytics',              to: '/reports',       color: 'text-indigo-600 bg-indigo-50' },
+              { icon: Tag,       label: 'Coupons',       sub: 'Manage offers',               to: '/coupons',       color: 'text-pink-600 bg-pink-50' },
+            ].map(({ icon: Icon, label, sub, to, color }) => (
+              <button key={to} onClick={() => navigate(to)} className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 text-left transition-colors group">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+                  <Icon size={15} />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>{label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--t4)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-800">{label}</div>
+                  <div className="text-xs text-gray-400 truncate">{sub}</div>
                 </div>
-                <ArrowRight size={13} style={{ color: 'var(--t4)', flexShrink: 0 }} />
+                <ArrowRight size={13} className="text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
               </button>
             ))}
           </div>
         </div>
 
         {/* Today's Bills */}
-        <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.2px' }}>Today's Bills</div>
-            <button
-              onClick={() => navigate('/sales-history')}
-              style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-600)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              View all →
-            </button>
+        <div className="card lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">Today's Bills</h3>
+            <button onClick={() => navigate('/sales-history')} className="text-blue-600 text-sm hover:underline">View all</button>
           </div>
-
           {todaysBills.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--t4)' }}>
-              <ShoppingCart size={36} style={{ margin: '0 auto 10px', opacity: 0.25, display: 'block' }} />
-              <p style={{ fontSize: 13, marginBottom: 14 }}>No bills generated today</p>
-              <button onClick={() => navigate('/new-bill')} className="btn-primary" style={{ fontSize: 12, padding: '8px 18px' }}>
-                Create First Bill
-              </button>
+            <div className="text-center py-10 text-gray-400">
+              <ShoppingCart size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No bills generated today</p>
+              <button onClick={() => navigate('/new-bill')} className="mt-3 btn-primary text-sm py-2">Create First Bill</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {todaysBills.map(bill => {
-                const ps = PAY_STYLE[bill.paymentMode] || { bg: '#f9fafb', color: '#374151' };
-                return (
-                  <div key={bill.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 12px', borderRadius: 9, background: '#f9fafb',
-                    border: '1px solid var(--border)',
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>
-                        {bill.customerName || 'Walk-in'}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
-                        {bill.billNumber} · {new Date(bill.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
-                        background: ps.bg, color: ps.color,
-                      }}>
-                        {PAY_LABEL[bill.paymentMode] || bill.paymentMode}
-                      </span>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--t1)', fontVariantNumeric: 'tabular-nums' }}>
-                        ₹{bill.total.toLocaleString('en-IN')}
-                      </div>
-                    </div>
+            <div className="space-y-2">
+              {todaysBills.map(bill => (
+                <div key={bill.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{bill.customerName}</div>
+                    <div className="text-xs text-gray-400">{bill.billNumber} · {new Date(bill.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Payment breakdown */}
-          {Object.keys(payBreakdown).length > 0 && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-              {Object.entries(payBreakdown).map(([mode, amt]) => {
-                const ps = PAY_STYLE[mode] || { bg: '#f9fafb', color: '#374151' };
-                return (
-                  <div key={mode} style={{
-                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7,
-                    background: ps.bg, color: ps.color,
-                  }}>
-                    {PAY_LABEL[mode] || mode}: ₹{Math.round(amt).toLocaleString('en-IN')}
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gray-900">₹{bill.total.toLocaleString('en-IN')}</div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      bill.paymentMode === 'cash'    ? 'bg-green-100 text-green-700' :
+                      bill.paymentMode === 'upi'     ? 'bg-blue-100 text-blue-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>
+                      {paymentLabels[bill.paymentMode] || bill.paymentMode}
+                    </span>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Low Stock Alerts ────────────────────────────────────────────── */}
+      {/* Low Stock Alerts */}
       {hasLowStock && (
-        <div id="low-stock-section" style={{ marginTop: 14 }} className="card">
-          <div style={{
-            background: '#fef2f2', border: '1px solid #fecaca',
-            borderRadius: 10, padding: '12px 16px', marginBottom: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertTriangle size={16} style={{ color: '#dc2626' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#991b1b' }}>
-                Low Stock Alerts
-              </span>
-              <span style={{
-                fontSize: 11, fontWeight: 700, background: '#dc2626', color: '#fff',
-                padding: '1px 7px', borderRadius: 99,
-              }}>
-                {lowStockProducts.length}
-              </span>
+        <div id="low-stock-section" className="mt-4 card border-red-100 bg-red-50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-red-600" />
+              <h3 className="font-semibold text-red-800">Low Stock Alerts</h3>
+              <span className="text-xs bg-red-600 text-white rounded-full px-2 py-0.5 font-bold">{lowStockProducts.length}</span>
             </div>
-            <button
-              onClick={() => navigate('/inventory')}
-              style={{ fontSize: 12, fontWeight: 600, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              Restock →
+            <button onClick={() => navigate('/inventory')} className="text-sm text-red-700 font-medium hover:underline flex items-center gap-1">
+              Restock <ArrowRight size={13} />
             </button>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {lowStockProducts.map(p => (
-              <div key={p.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 12px', borderRadius: 9, background: '#fff',
-                border: '1px solid #fee2e2',
-              }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>Min. {p.minStockAlert} units</div>
+              <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-100">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-800 truncate">{p.name}</div>
+                  <div className="text-xs text-gray-500">Min. {p.minStockAlert} units</div>
                 </div>
-                <span style={{
-                  fontSize: 12, fontWeight: 700, marginLeft: 8, flexShrink: 0,
-                  color: p.stockQty === 0 ? '#dc2626' : '#ea580c',
-                }}>
-                  {p.stockQty === 0 ? 'Out of stock' : `${p.stockQty} left`}
-                </span>
+                <div className="text-right ml-2 shrink-0">
+                  <span className={`text-sm font-bold ${p.stockQty === 0 ? 'text-red-700' : 'text-orange-600'}`}>
+                    {p.stockQty === 0 ? 'Out of stock' : `${p.stockQty} left`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Today's Expenses Summary */}
+      {todaysExpenses.length > 0 && (
+        <div className="mt-4 card border-orange-100 bg-orange-50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Wallet size={16} className="text-orange-600" />
+              <h3 className="font-semibold text-orange-800">Today's Expenses</h3>
+            </div>
+            <button onClick={() => navigate('/expenses')} className="text-sm text-orange-700 font-medium hover:underline flex items-center gap-1">
+              View all <ArrowRight size={13} />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {todaysExpenses.map(exp => (
+              <div key={exp.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-orange-100">
+                <span className="text-sm text-gray-600 capitalize">{exp.category}:</span>
+                <span className="text-sm font-bold text-gray-900">₹{parseFloat(exp.amount).toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-sm font-bold text-orange-700">
+            Total: ₹{Math.round(todaysExpenseTotal).toLocaleString('en-IN')}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Breakdown */}
+      {todaysBills.length > 0 && (
+        <div className="mt-4 card">
+          <h3 className="font-semibold text-gray-800 mb-3">Today's Payment Breakdown</h3>
+          <div className="flex flex-wrap gap-3">
+            {Object.entries(paymentBreakdown).map(([mode, amount]) => (
+              <div key={mode} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                <span className="text-sm text-gray-600 capitalize">{paymentLabels[mode] || mode}:</span>
+                <span className="text-sm font-bold text-gray-900">₹{amount.toLocaleString('en-IN')}</span>
               </div>
             ))}
           </div>
